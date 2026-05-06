@@ -166,19 +166,63 @@ func cmdActions(args []string) {
 }
 
 func cmdConnect(ctx context.Context, store storage.Store, vault *secrets.Vault, args []string) {
-	if len(args) != 2 {
-		fail(errors.New("usage: pgf connect <type> <name>"))
+	// Flags must come before <type> <name>.
+	var inputArg string
+	var noValidate bool
+	pos := []string{}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--input" || a == "-i":
+			if i+1 >= len(args) {
+				fail(errors.New("--input requires a JSON value (or @file)"))
+			}
+			i++
+			inputArg = args[i]
+		case a == "--no-validate":
+			noValidate = true
+		default:
+			pos = append(pos, a)
+		}
 	}
-	typ, name := args[0], args[1]
+	if len(pos) != 2 {
+		fail(errors.New("usage: pgf connect [--input '{...}' [--no-validate]] <type> <name>"))
+	}
+	typ, name := pos[0], pos[1]
+
 	c, ok := connector.Default.Get(typ)
 	if !ok {
 		fail(fmt.Errorf("unknown connector: %s", typ))
 	}
-	cred, err := runWizard(ctx, typ, name, c.Credential())
-	if err != nil {
-		fail(err)
+
+	var cred connector.Credential
+	if inputArg != "" {
+		// Non-interactive: provisioning by a script or human, no agent
+		// involvement here (agents shouldn't write credentials).
+		raw, err := readJSONInput(inputArg)
+		if err != nil {
+			fail(err)
+		}
+		spec := c.Credential()
+		values := connector.Values(raw)
+		values = spec.Defaults(values)
+		cred = connector.Credential{Type: typ, Name: name, Values: values}
+		if !noValidate {
+			fmt.Print("Validating... ")
+			if err := spec.Validate(ctx, cred); err != nil {
+				fmt.Println("✗")
+				fail(err)
+			}
+			fmt.Println("✓")
+		}
+	} else {
+		var err error
+		cred, err = runWizard(ctx, typ, name, c.Credential())
+		if err != nil {
+			fail(err)
+		}
 	}
-	// Seal FieldSecret values before persisting.
+
 	sealed, err := secrets.SealValues(vault, c.Credential().Schema(), cred.Values)
 	if err != nil {
 		fail(err)
@@ -276,12 +320,31 @@ func cmdRun(ctx context.Context, store storage.Store, vault *secrets.Vault, stat
 // parseParams turns ["-p", "k=v", "-p", "k2=v2"] into Values. A repeated
 // key promotes the value to a []string — so list-typed fields can be passed
 // either as comma-separated ("-p to=a,b") or by repeating ("-p to=a -p to=b").
+//
+// Also accepts --input '{"k": "v"}' (or --input @path/to/file.json) as an
+// alternative for nested/complex params. -p and --input can be mixed; -p
+// takes precedence on key conflicts.
 func parseParams(args []string) (connector.Values, error) {
-	out := connector.Values{}
+	// Two passes: --input fills the base, then -p overrides. Order in the
+	// command line doesn't matter — -p always wins on key conflicts.
+	base := connector.Values{}
+	overrides := connector.Values{}
 	i := 0
 	for i < len(args) {
 		a := args[i]
 		switch {
+		case a == "--input" || a == "-i":
+			if i+1 >= len(args) {
+				return nil, errors.New("--input requires a JSON value (or @file)")
+			}
+			i++
+			parsed, err := readJSONInput(args[i])
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range parsed {
+				base[k] = v
+			}
 		case a == "-p" || a == "--param":
 			if i+1 >= len(args) {
 				return nil, errors.New("-p requires k=v")
@@ -291,22 +354,44 @@ func parseParams(args []string) (connector.Values, error) {
 			if !ok {
 				return nil, fmt.Errorf("expected k=v, got %q", args[i])
 			}
-			if existing, present := out[k]; present {
+			if existing, present := overrides[k]; present {
 				switch e := existing.(type) {
 				case string:
-					out[k] = []string{e, v}
+					overrides[k] = []string{e, v}
 				case []string:
-					out[k] = append(e, v)
+					overrides[k] = append(e, v)
 				default:
-					out[k] = v // type drift — overwrite, last wins
+					overrides[k] = v
 				}
 			} else {
-				out[k] = v
+				overrides[k] = v
 			}
 		default:
 			return nil, fmt.Errorf("unexpected arg %q", a)
 		}
 		i++
+	}
+	for k, v := range overrides {
+		base[k] = v
+	}
+	return base, nil
+}
+
+// readJSONInput parses a JSON object from a literal string or @file path.
+// Returns map[string]any so callers can iterate keys.
+func readJSONInput(arg string) (map[string]any, error) {
+	raw := arg
+	if strings.HasPrefix(raw, "@") {
+		path := strings.TrimPrefix(raw, "@")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read --input file %q: %w", path, err)
+		}
+		raw = string(data)
+	}
+	var out map[string]any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("parse --input as JSON object: %w", err)
 	}
 	return out, nil
 }

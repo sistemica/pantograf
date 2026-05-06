@@ -8,13 +8,13 @@ Single connector covering both IMAP (read / list / search / draft) and SMTP
 
 | Name | Description |
 |---|---|
-| `read_emails` | Most recent N from a folder. Multipart-aware: separates `body` (text/plain), `html_body`, `attachments` metadata. |
-| `get_email` | One message by UID, with body + attachment list. |
-| `download_attachment` | One attachment part by UID + part_id, decoded, written to disk. |
-| `list_folders` | All IMAP mailboxes (full label hierarchy). |
-| `search_emails` | Subject substring search; configurable limit. |
-| `save_draft` | Compose + APPEND to Drafts. cc/bcc/attachments supported. |
-| `send_email` | Send via SMTP. cc/bcc/from-override/attachments. |
+| `read-emails` | Most recent N from a folder. Multipart-aware: separates `body` (text/plain), `html_body`, `attachments` metadata. |
+| `get-email` | One message by UID, with body + attachment list. |
+| `download-attachment` | One attachment part by UID + part_id, decoded, written to disk. |
+| `list-folders` | All IMAP mailboxes (full label hierarchy). |
+| `search-emails` | Subject substring search; configurable limit. |
+| `save-draft` | Compose + APPEND to Drafts. cc/bcc/attachments supported. |
+| `send-email` | Send via SMTP. cc/bcc/from-override/attachments. |
 
 ## Triggers
 
@@ -57,7 +57,7 @@ to SMTP but not IMAP.
 
 ## Multipart parsing
 
-`read_emails` / `get_email` decode the full RFC 822 message and surface:
+`read-emails` / `get-email` decode the full RFC 822 message and surface:
 
 - `body` — first text/plain part
 - `html_body` — first text/html alternative
@@ -72,19 +72,19 @@ multipart structures, and RFC 2047 encoded filenames.
 pgf connect email sistemica
 # wizard: pick "Fastmail" preset → email + app password → IMAP+SMTP probe
 
-pgf run email/sistemica list_folders
-pgf run email/sistemica read_emails -p folder=INBOX -p limit=5
-pgf run email/sistemica search_emails -p query=invoice
-pgf run email/sistemica get_email -p uid=12345
+pgf run email/sistemica list-folders
+pgf run email/sistemica read-emails -p folder=INBOX -p limit=5
+pgf run email/sistemica search-emails -p query=invoice
+pgf run email/sistemica get-email -p uid=12345
 
-pgf run email/sistemica download_attachment -p uid=12345 -p part_id=2 \
+pgf run email/sistemica download-attachment -p uid=12345 -p part_id=2 \
                                            -p out=/tmp/file.pdf
 
-pgf run email/sistemica send_email -p to=foo@example.com \
+pgf run email/sistemica send-email -p to=foo@example.com \
                                   -p subject=hi -p body=hello \
                                   -p attachments=/tmp/foo.pdf
 
-pgf run email/sistemica save_draft -p to=foo@example.com \
+pgf run email/sistemica save-draft -p to=foo@example.com \
                                   -p subject=draft -p body=...
 ```
 

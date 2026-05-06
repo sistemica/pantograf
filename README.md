@@ -87,8 +87,9 @@ type WebhookTrigger interface {    // Webhook
 
 | Name | Actions | Triggers | Notes |
 |---|---|---|---|
-| [email](connectors/email/README.md) | read/get/list/search/send/save_draft/download_attachment | — | IMAP + SMTP, vendor presets (Fastmail/GMX/Gmail/Custom), multipart parsing, encrypted-at-rest creds |
-| [telegram](connectors/telegram/README.md) | get_me/get_updates/send_message/send_photo/send_document/set_webhook/delete_webhook/get_webhook_info | messages (polling, persistent offset) | Bot API |
+| [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail/GMX/Gmail/Custom), multipart parsing, encrypted-at-rest creds |
+| [telegram](connectors/telegram/README.md) | get-me / get-updates / send-message / send-photo / send-document / set-webhook / delete-webhook / get-webhook-info | messages (polling, persistent offset) | Bot API |
+| [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff |
 | [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs |
 
 ### Transports
@@ -116,8 +117,8 @@ go build -o ~/.local/bin/pgf ./cmd/pgf
 
 # 1. Connect Fastmail (wizard runs IMAP+SMTP probe; password sealed at rest)
 pgf connect email sistemica
-pgf run email/sistemica list_folders
-pgf run email/sistemica send_email -p to=foo@bar.com -p subject=hi -p body=hello
+pgf run email/sistemica list-folders
+pgf run email/sistemica send-email -p to=foo@bar.com -p subject=hi -p body=hello
 
 # 2. Connect a Telegram bot, stream incoming messages
 pgf connect telegram personal
@@ -147,7 +148,7 @@ pgf serve --addr :8080 --public-url https://my.host
 Confirmed-working today (real E2E tested in development):
 
 - Email: Fastmail (Sistemica account) — wizard, list/read/search/draft/send/attachments, byte-perfect attachment round-trip
-- Telegram: getMe, send_message, send_photo, send_document
+- Telegram: getMe, send-message, send-photo, send-document
 - Telegram messages trigger: long-poll + persistent offset (verified resume across restart)
 - Generic webhook: GET / POST JSON / POST form / PUT, HMAC-SHA256 (LemonSqueezy + GitHub-prefix), API-key auth, response_file read at request time
 

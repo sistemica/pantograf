@@ -129,7 +129,7 @@ Telegram → webhook flow:
 
 ```bash
 pgf connect webhook telegram-in
-pgf run telegram/personal set_webhook \
+pgf run telegram/personal set-webhook \
        -p url=https://my.host/webhook/telegram-in/incoming \
        -p secret_token=secretvalue
 # Configure telegram-in's secret_token to match.

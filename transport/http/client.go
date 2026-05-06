@@ -207,7 +207,9 @@ func (c *Client) newRequest(ctx context.Context, method, path string, query url.
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	req.Header.Set("Accept", "application/json")
+	// Accept is set by the JSON helpers (doJSON). Do() leaves it empty so
+	// the caller can negotiate (Lexware /v1/files/{id} returns base64-in-JSON
+	// when Accept: application/json is set, but binary bytes otherwise).
 	return req, nil
 }
 
@@ -241,6 +243,9 @@ func (c *Client) resolveURL(path string, query url.Values) (string, error) {
 
 // doJSON sends req, asserts 2xx, and JSON-unmarshals into out (if non-nil).
 func (c *Client) doJSON(req *stdhttp.Request, out any) error {
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "application/json")
+	}
 	resp, err := c.inner.Do(req)
 	if err != nil {
 		return err

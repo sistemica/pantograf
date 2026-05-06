@@ -1,4 +1,4 @@
-// Command mw is the unified CLI consumer of the connector library.
+// Command pgf is the unified CLI consumer of the pantograf connector library.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 
 	"github.com/sistemica/pantograf/connector"
 	emailpkg "github.com/sistemica/pantograf/connectors/email"
+	lexofficepkg "github.com/sistemica/pantograf/connectors/lexoffice"
 	telegrampkg "github.com/sistemica/pantograf/connectors/telegram"
 	webhookpkg "github.com/sistemica/pantograf/connectors/webhook"
 	"github.com/sistemica/pantograf/secrets"
@@ -29,6 +30,7 @@ func init() {
 		emailpkg.Register,
 		telegrampkg.Register,
 		webhookpkg.Register,
+		lexofficepkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)
@@ -52,7 +54,7 @@ Usage:
 
 Examples:
   pgf connect email personal
-  pgf run email/personal read_emails -p folder=INBOX -p limit=5
+  pgf run email/personal read-emails -p folder=INBOX -p limit=5
   pgf watch telegram/personal messages
   pgf serve --addr :8080 --public-url https://my.host
 `
@@ -112,7 +114,7 @@ func cmdConnectors() {
 
 func cmdTriggers(args []string) {
 	if len(args) != 1 {
-		fail(errors.New("usage: mw triggers <type>"))
+		fail(errors.New("usage: pgf triggers <type>"))
 	}
 	c, ok := connector.Default.Get(args[0])
 	if !ok {
@@ -141,7 +143,7 @@ func cmdTriggers(args []string) {
 
 func cmdActions(args []string) {
 	if len(args) != 1 {
-		fail(errors.New("usage: mw actions <type>"))
+		fail(errors.New("usage: pgf actions <type>"))
 	}
 	c, ok := connector.Default.Get(args[0])
 	if !ok {
@@ -165,7 +167,7 @@ func cmdActions(args []string) {
 
 func cmdConnect(ctx context.Context, store storage.Store, vault *secrets.Vault, args []string) {
 	if len(args) != 2 {
-		fail(errors.New("usage: mw connect <type> <name>"))
+		fail(errors.New("usage: pgf connect <type> <name>"))
 	}
 	typ, name := args[0], args[1]
 	c, ok := connector.Default.Get(typ)
@@ -194,7 +196,7 @@ func cmdInstances(store storage.Store) {
 		fail(err)
 	}
 	if len(refs) == 0 {
-		fmt.Println("No instances. Use `mw connect <type> <name>` to add one.")
+		fmt.Println("No instances. Use `pgf connect <type> <name>` to add one.")
 		return
 	}
 	for _, r := range refs {
@@ -204,7 +206,7 @@ func cmdInstances(store storage.Store) {
 
 func cmdRemove(store storage.Store, args []string) {
 	if len(args) != 1 {
-		fail(errors.New("usage: mw rm <type>/<name>"))
+		fail(errors.New("usage: pgf rm <type>/<name>"))
 	}
 	typ, name, ok := strings.Cut(args[0], "/")
 	if !ok {
@@ -218,7 +220,7 @@ func cmdRemove(store storage.Store, args []string) {
 
 func cmdRun(ctx context.Context, store storage.Store, vault *secrets.Vault, stateMgr state.Manager, args []string) {
 	if len(args) < 2 {
-		fail(errors.New("usage: mw run <type>/<name> <action> [-p k=v ...]"))
+		fail(errors.New("usage: pgf run <type>/<name> <action> [-p k=v ...]"))
 	}
 	typ, name, ok := strings.Cut(args[0], "/")
 	if !ok {
@@ -313,7 +315,7 @@ func parseParams(args []string) (connector.Values, error) {
 // until SIGINT/SIGTERM. Each line is a single Event.
 func cmdWatch(ctx context.Context, store storage.Store, vault *secrets.Vault, stateMgr state.Manager, args []string) {
 	if len(args) < 2 {
-		fail(errors.New("usage: mw watch <type>/<name> <trigger> [-p k=v ...]"))
+		fail(errors.New("usage: pgf watch <type>/<name> <trigger> [-p k=v ...]"))
 	}
 	typ, name, ok := strings.Cut(args[0], "/")
 	if !ok {
@@ -366,7 +368,7 @@ func cmdWatch(ctx context.Context, store storage.Store, vault *secrets.Vault, st
 
 	streaming, ok := trig.(connector.StreamingTrigger)
 	if !ok {
-		fail(fmt.Errorf("trigger %s has strategy %q; use 'mw serve' for webhook triggers", trigName, trig.Strategy()))
+		fail(fmt.Errorf("trigger %s has strategy %q; use 'pgf serve' for webhook triggers", trigName, trig.Strategy()))
 	}
 	if err := streaming.Subscribe(watchCtx, sess, params, emit); err != nil && !errors.Is(err, context.Canceled) {
 		fail(err)

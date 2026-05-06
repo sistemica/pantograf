@@ -74,7 +74,7 @@ func isURL(s string) bool {
 
 type getMeAction struct{}
 
-func (getMeAction) Name() string         { return "get_me" }
+func (getMeAction) Name() string         { return "get-me" }
 func (getMeAction) DisplayName() string  { return "Get bot info" }
 func (getMeAction) Description() string  { return "Returns the bot's identity (id, username, first_name)." }
 func (getMeAction) Schema() connector.Schema {
@@ -97,7 +97,7 @@ func (getMeAction) Run(ctx context.Context, sess connector.Session, _ connector.
 
 type sendMessageAction struct{}
 
-func (sendMessageAction) Name() string         { return "send_message" }
+func (sendMessageAction) Name() string         { return "send-message" }
 func (sendMessageAction) DisplayName() string  { return "Send message" }
 func (sendMessageAction) Description() string  { return "Send a text message to a chat." }
 func (sendMessageAction) Schema() connector.Schema {
@@ -153,7 +153,7 @@ func (a sendMessageAction) Run(ctx context.Context, sess connector.Session, para
 
 type sendPhotoAction struct{}
 
-func (sendPhotoAction) Name() string         { return "send_photo" }
+func (sendPhotoAction) Name() string         { return "send-photo" }
 func (sendPhotoAction) DisplayName() string  { return "Send photo" }
 func (sendPhotoAction) Description() string  { return "Send a photo. Accepts a local file path or an http(s) URL." }
 func (sendPhotoAction) Schema() connector.Schema {
@@ -178,7 +178,7 @@ func (a sendPhotoAction) Run(ctx context.Context, sess connector.Session, params
 
 type sendDocumentAction struct{}
 
-func (sendDocumentAction) Name() string         { return "send_document" }
+func (sendDocumentAction) Name() string         { return "send-document" }
 func (sendDocumentAction) DisplayName() string  { return "Send document" }
 func (sendDocumentAction) Description() string  { return "Send any file as a document. Accepts a local file path or an http(s) URL." }
 func (sendDocumentAction) Schema() connector.Schema {

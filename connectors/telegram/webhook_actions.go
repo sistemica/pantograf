@@ -17,7 +17,7 @@ import (
 
 type setWebhookAction struct{}
 
-func (setWebhookAction) Name() string         { return "set_webhook" }
+func (setWebhookAction) Name() string         { return "set-webhook" }
 func (setWebhookAction) DisplayName() string  { return "Set webhook URL" }
 func (setWebhookAction) Description() string  { return "Tell Telegram to POST updates to the given HTTPS URL. Mutually exclusive with the messages polling trigger." }
 func (setWebhookAction) Schema() connector.Schema {
@@ -63,7 +63,7 @@ func (a setWebhookAction) Run(ctx context.Context, sess connector.Session, param
 
 type deleteWebhookAction struct{}
 
-func (deleteWebhookAction) Name() string         { return "delete_webhook" }
+func (deleteWebhookAction) Name() string         { return "delete-webhook" }
 func (deleteWebhookAction) DisplayName() string  { return "Delete webhook" }
 func (deleteWebhookAction) Description() string  { return "Clear the webhook so the bot can be polled or pointed elsewhere." }
 func (deleteWebhookAction) Schema() connector.Schema {
@@ -92,7 +92,7 @@ func (a deleteWebhookAction) Run(ctx context.Context, sess connector.Session, pa
 
 type getWebhookInfoAction struct{}
 
-func (getWebhookInfoAction) Name() string         { return "get_webhook_info" }
+func (getWebhookInfoAction) Name() string         { return "get-webhook-info" }
 func (getWebhookInfoAction) DisplayName() string  { return "Get webhook info" }
 func (getWebhookInfoAction) Description() string  { return "Return current webhook URL and pending update count." }
 func (getWebhookInfoAction) Schema() connector.Schema { return connector.Schema{} }

@@ -24,7 +24,7 @@ import (
 // /<type>/<name>/<trigger> — and shares the listen port + the
 // stdout NDJSON event stream.
 //
-//   mw serve [flags] [<type>/<name>:<trigger> ...]
+//   pgf serve [flags] [<type>/<name>:<trigger> ...]
 //
 // Flags:
 //   --addr        :8080 by default

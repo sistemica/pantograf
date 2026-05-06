@@ -19,7 +19,7 @@ import (
 
 type readEmailsAction struct{}
 
-func (readEmailsAction) Name() string         { return "read_emails" }
+func (readEmailsAction) Name() string         { return "read-emails" }
 func (readEmailsAction) DisplayName() string  { return "Read emails" }
 func (readEmailsAction) Description() string  { return "Fetch the most recent N messages from a folder." }
 func (readEmailsAction) Schema() connector.Schema {
@@ -137,7 +137,7 @@ func formatAddr(a imap.Address) string {
 
 type listFoldersAction struct{}
 
-func (listFoldersAction) Name() string         { return "list_folders" }
+func (listFoldersAction) Name() string         { return "list-folders" }
 func (listFoldersAction) DisplayName() string  { return "List folders" }
 func (listFoldersAction) Description() string  { return "List all IMAP folders (mailboxes)." }
 func (listFoldersAction) Schema() connector.Schema {
@@ -169,7 +169,7 @@ func (listFoldersAction) Run(ctx context.Context, sess connector.Session, _ conn
 
 type searchEmailsAction struct{}
 
-func (searchEmailsAction) Name() string         { return "search_emails" }
+func (searchEmailsAction) Name() string         { return "search-emails" }
 func (searchEmailsAction) DisplayName() string  { return "Search emails" }
 func (searchEmailsAction) Description() string  { return "Search a folder by subject substring." }
 func (searchEmailsAction) Schema() connector.Schema {
@@ -249,7 +249,7 @@ func fetchByNums(cli *imapclient.Client, nums []uint32) ([]EmailMessage, error) 
 
 type getEmailAction struct{}
 
-func (getEmailAction) Name() string         { return "get_email" }
+func (getEmailAction) Name() string         { return "get-email" }
 func (getEmailAction) DisplayName() string  { return "Get email" }
 func (getEmailAction) Description() string  { return "Fetch a single message by UID, with body." }
 func (getEmailAction) Schema() connector.Schema {
@@ -385,7 +385,7 @@ func buildMessage(params connector.Values, defaultFrom string) (*mail.Msg, []str
 
 type downloadAttachmentAction struct{}
 
-func (downloadAttachmentAction) Name() string         { return "download_attachment" }
+func (downloadAttachmentAction) Name() string         { return "download-attachment" }
 func (downloadAttachmentAction) DisplayName() string  { return "Download attachment" }
 func (downloadAttachmentAction) Description() string  { return "Fetch one attachment part by UID + part_id and write decoded bytes to disk." }
 func (downloadAttachmentAction) Schema() connector.Schema {
@@ -485,7 +485,7 @@ func (a downloadAttachmentAction) Run(ctx context.Context, sess connector.Sessio
 
 type saveDraftAction struct{}
 
-func (saveDraftAction) Name() string         { return "save_draft" }
+func (saveDraftAction) Name() string         { return "save-draft" }
 func (saveDraftAction) DisplayName() string  { return "Save draft" }
 func (saveDraftAction) Description() string  { return "Compose a message and APPEND it to the Drafts folder." }
 func (saveDraftAction) Schema() connector.Schema {
@@ -544,7 +544,7 @@ func (a saveDraftAction) Run(ctx context.Context, sess connector.Session, params
 
 type sendEmailAction struct{}
 
-func (sendEmailAction) Name() string         { return "send_email" }
+func (sendEmailAction) Name() string         { return "send-email" }
 func (sendEmailAction) DisplayName() string  { return "Send email" }
 func (sendEmailAction) Description() string  { return "Send an email via SMTP." }
 func (sendEmailAction) Schema() connector.Schema {

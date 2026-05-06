@@ -72,7 +72,7 @@ func callGetUpdates(ctx context.Context, cli *httptr.Client, offset int64, limit
 
 type getUpdatesAction struct{}
 
-func (getUpdatesAction) Name() string         { return "get_updates" }
+func (getUpdatesAction) Name() string         { return "get-updates" }
 func (getUpdatesAction) DisplayName() string  { return "Get updates" }
 func (getUpdatesAction) Description() string  { return "Fetch pending updates once. For continuous streaming use the messages trigger." }
 func (getUpdatesAction) Schema() connector.Schema {

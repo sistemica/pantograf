@@ -1,0 +1,4 @@
+/mw
+/cmd/mw/mw
+*.test
+*.out

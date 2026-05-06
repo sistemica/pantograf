@@ -90,6 +90,7 @@ type WebhookTrigger interface {    // Webhook
 | [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail/GMX/Gmail/Custom), multipart parsing, encrypted-at-rest creds |
 | [telegram](connectors/telegram/README.md) | get-me / get-updates / send-message / send-photo / send-document / set-webhook / delete-webhook / get-webhook-info | messages (polling, persistent offset) | Bot API |
 | [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff |
+| [rss](connectors/rss/README.md) | fetch / list-new / mark-seen / info / reset | new-items (polling, persistent watermark) | Stateful RSS/Atom/JSON Feed reader. Skips backlog by default; `include_backlog=true` for first-run flush. |
 | [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs |
 
 ### Transports

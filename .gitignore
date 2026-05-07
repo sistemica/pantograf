@@ -2,3 +2,4 @@
 /cmd/mw/mw
 *.test
 *.out
+pgf

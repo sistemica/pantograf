@@ -1,6 +1,6 @@
 // Package secrets manages the master key and field-level encryption used by
 // the storage backends. Format: a NaCl secretbox sealed with a 32-byte key
-// derived once and persisted at ~/.config/mw/master.key (overridable via
+// derived once and persisted at ~/.config/pgf/master.key (overridable via
 // MW_MASTER_KEY env var holding base64).
 //
 // Sealed values are base64-encoded ciphertext prefixed with "sealed:" so a
@@ -24,7 +24,7 @@ import (
 const (
 	sealedPrefix = "sealed:"
 	keyEnv       = "MW_MASTER_KEY"
-	keyDirEnv    = "MW_KEY_DIR"
+	keyDirEnv    = "PGF_KEY_DIR"
 )
 
 // Vault holds the symmetric master key in memory.
@@ -43,7 +43,7 @@ func Load() (*Vault, error) {
 		return &Vault{key: k}, nil
 	}
 
-	// 2. File, default ~/.config/mw/master.key.
+	// 2. File, default ~/.config/pgf/master.key.
 	path, err := keyPath()
 	if err != nil {
 		return nil, err
@@ -67,13 +67,13 @@ func keyPath() (string, error) {
 		return filepath.Join(v, "master.key"), nil
 	}
 	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
-		return filepath.Join(v, "mw", "master.key"), nil
+		return filepath.Join(v, "pgf", "master.key"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "mw", "master.key"), nil
+	return filepath.Join(home, ".config", "pgf", "master.key"), nil
 }
 
 func create(path string) (*Vault, error) {

@@ -92,6 +92,7 @@ type WebhookTrigger interface {    // Webhook
 | [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff |
 | [rss](connectors/rss/README.md) | fetch / list-new / mark-seen / info / reset | new-items (polling, persistent watermark) | Stateful RSS/Atom/JSON Feed reader. Skips backlog by default; `include_backlog=true` for first-run flush. |
 | [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs |
+| [youtrack](connectors/youtrack/README.md) | me / users / projects / issues / comments / attachments / `apply-command` (universal field setter) / create-token | — | JetBrains issue tracker. Multi-user via one instance per user-token. Hub permanent tokens. |
 
 ### Transports
 

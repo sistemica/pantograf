@@ -17,6 +17,7 @@ import (
 	rsspkg "github.com/sistemica/pantograf/connectors/rss"
 	telegrampkg "github.com/sistemica/pantograf/connectors/telegram"
 	webhookpkg "github.com/sistemica/pantograf/connectors/webhook"
+	youtrackpkg "github.com/sistemica/pantograf/connectors/youtrack"
 	"github.com/sistemica/pantograf/secrets"
 	"github.com/sistemica/pantograf/state"
 	"github.com/sistemica/pantograf/state/fsstore"
@@ -33,6 +34,7 @@ func init() {
 		webhookpkg.Register,
 		lexofficepkg.Register,
 		rsspkg.Register,
+		youtrackpkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)

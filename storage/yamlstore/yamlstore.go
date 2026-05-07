@@ -1,5 +1,5 @@
 // Package yamlstore is a filesystem-backed Store: one YAML file per instance
-// at <root>/<type>/<name>.yaml. Default root is ~/.config/mw/instances.
+// at <root>/<type>/<name>.yaml. Default root is ~/.config/pgf/instances.
 //
 // Secret-field values are written in plaintext for now. A follow-up will
 // transparently encrypt fields whose Schema marks them FieldSecret.
@@ -42,17 +42,17 @@ func New(root string) (*Store, error) {
 }
 
 func defaultRoot() (string, error) {
-	if v := os.Getenv("MW_STORE_DIR"); v != "" {
+	if v := os.Getenv("PGF_STORE_DIR"); v != "" {
 		return v, nil
 	}
 	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
-		return filepath.Join(v, "mw", "instances"), nil
+		return filepath.Join(v, "pgf", "instances"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "mw", "instances"), nil
+	return filepath.Join(home, ".config", "pgf", "instances"), nil
 }
 
 // Root returns the absolute storage root. Useful for the CLI to print.

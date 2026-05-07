@@ -26,8 +26,8 @@ type Manager struct {
 }
 
 // New returns a Manager rooted at root. Pass "" to use the default
-// ($XDG_STATE_HOME/mw/state, falling back to ~/.local/state/mw/state).
-// Override with MW_STATE_DIR.
+// ($XDG_STATE_HOME/pgf/state, falling back to ~/.local/state/pgf/state).
+// Override with PGF_STATE_DIR.
 func New(root string) (*Manager, error) {
 	if root == "" {
 		var err error
@@ -51,17 +51,17 @@ func (m *Manager) For(typ, name string) state.Store {
 }
 
 func defaultRoot() (string, error) {
-	if v := os.Getenv("MW_STATE_DIR"); v != "" {
+	if v := os.Getenv("PGF_STATE_DIR"); v != "" {
 		return v, nil
 	}
 	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
-		return filepath.Join(v, "mw", "state"), nil
+		return filepath.Join(v, "pgf", "state"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".local", "state", "mw", "state"), nil
+	return filepath.Join(home, ".local", "state", "pgf", "state"), nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────

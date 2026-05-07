@@ -53,6 +53,15 @@ func (Connector) Actions() []connector.Action {
 		downloadAttachmentAction{},
 		createTokenAction{},
 		listProjectTeamAction{},
+		listArticlesAction{},
+		getArticleAction{},
+		getArticleTreeAction{},
+		listChildArticlesAction{},
+		createArticleAction{},
+		updateArticleAction{},
+		deleteArticleAction{},
+		linkIssuesAction{},
+		listIssueLinksAction{},
 	}
 }
 

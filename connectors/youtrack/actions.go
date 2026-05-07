@@ -495,6 +495,33 @@ func (a createTokenAction) Run(ctx context.Context, sess connector.Session, para
 	return out, nil
 }
 
+// resolveArticleID looks up an article by readable id (e.g. PGFT-A-1) and
+// returns its internal id. Internal-form input passes through.
+//
+// Articles in /api/articles/{id} accept the readable form for GET, but
+// when referenced in request bodies (parentArticle.id, etc.) the internal
+// id is required.
+func resolveArticleID(ctx context.Context, cli *httptr.Client, idOrReadable string) (string, error) {
+	if idOrReadable == "" {
+		return "", errors.New("article id required")
+	}
+	if looksLikeID(idOrReadable) {
+		return idOrReadable, nil
+	}
+	var a struct {
+		ID string `json:"id"`
+	}
+	q := url.Values{}
+	q.Set("fields", "id")
+	if err := cli.GetJSON(ctx, "/api/articles/"+url.PathEscape(idOrReadable), q, &a); err != nil {
+		return "", fmt.Errorf("lookup article %q: %w", idOrReadable, err)
+	}
+	if a.ID == "" {
+		return "", fmt.Errorf("article %q has no internal id", idOrReadable)
+	}
+	return a.ID, nil
+}
+
 // resolveYouTrackServiceID returns the Hub id of the YouTrack app service.
 // Lists all Hub services and picks the one whose applicationName is
 // "YouTrack" — different installs use different UUIDs (the "0-0-0-0-0"
@@ -833,6 +860,405 @@ func (a downloadAttachmentAction) Run(ctx context.Context, sess connector.Sessio
 	return map[string]any{"saved": true, "path": out, "size": n, "name": meta.Name}, nil
 }
 
+// ── list-articles ─────────────────────────────────────────────────────────
+
+const articleFields = "id,idReadable,summary,content,project(id,shortName,name),parentArticle(id,idReadable,summary),ordinal,created,updated,reporter(login,fullName),tags(name),hasChildren,childArticles(idReadable,summary,hasChildren,ordinal),visibility($type)"
+
+type listArticlesAction struct{}
+
+func (listArticlesAction) Name() string         { return "list-articles" }
+func (listArticlesAction) DisplayName() string  { return "List articles" }
+func (listArticlesAction) Description() string  { return "List knowledge-base articles. Filter by project + YouTrack query." }
+func (listArticlesAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "project_key", Kind: connector.FieldString, Description: "Filter to a project shortName."},
+		{Name: "query", Kind: connector.FieldString, Description: "Additional YouTrack query string."},
+		{Name: "top", Kind: connector.FieldInt, Default: 100},
+		{Name: "skip", Kind: connector.FieldInt, Default: 0},
+		{Name: "fields", Kind: connector.FieldString, Default: articleFields},
+	}}
+}
+
+func (a listArticlesAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	var bits []string
+	if pk := params.String("project_key"); pk != "" {
+		bits = append(bits, "project: "+pk)
+	}
+	if q := params.String("query"); q != "" {
+		bits = append(bits, q)
+	}
+	q := url.Values{}
+	q.Set("fields", params.String("fields"))
+	if len(bits) > 0 {
+		q.Set("query", strings.Join(bits, " "))
+	}
+	q.Set("$top", fmt.Sprintf("%d", params.Int("top")))
+	if skip := params.Int("skip"); skip > 0 {
+		q.Set("$skip", fmt.Sprintf("%d", skip))
+	}
+	var out []map[string]any
+	if err := s.http.GetJSON(ctx, "/api/articles", q, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── get-article ───────────────────────────────────────────────────────────
+
+type getArticleAction struct{}
+
+func (getArticleAction) Name() string         { return "get-article" }
+func (getArticleAction) DisplayName() string  { return "Get article" }
+func (getArticleAction) Description() string  { return "Fetch one knowledge-base article by id (readable like 'MW-A-1' or internal)." }
+func (getArticleAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true},
+		{Name: "fields", Kind: connector.FieldString, Default: articleFields},
+	}}
+}
+
+func (a getArticleAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	q := url.Values{}
+	q.Set("fields", params.String("fields"))
+	var out map[string]any
+	if err := s.http.GetJSON(ctx, "/api/articles/"+url.PathEscape(id), q, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── get-article-tree ──────────────────────────────────────────────────────
+//
+// Returns the root article in full + the entire descendant tree as a
+// short {id, summary, children[]} shape. Designed for "diff the whole
+// KB section" workflows where you cmp the JSON between polls.
+//
+// Walks recursively (one HTTP per article-with-children). depth caps the
+// recursion — default 10, plenty for typical KBs.
+
+type articleNode struct {
+	ID       string        `json:"id"`
+	Summary  string        `json:"summary"`
+	Children []articleNode `json:"children,omitempty"`
+}
+
+type getArticleTreeAction struct{}
+
+func (getArticleTreeAction) Name() string         { return "get-article-tree" }
+func (getArticleTreeAction) DisplayName() string  { return "Get article + descendant tree" }
+func (getArticleTreeAction) Description() string  { return "Root article in full + a short {id, summary, children[]} tree of all descendants. For polling-and-diff workflows." }
+func (getArticleTreeAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true},
+		{Name: "depth", Kind: connector.FieldInt, Default: 10, Description: "Recursion cap. 0 = unlimited."},
+	}}
+}
+
+func (a getArticleTreeAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	depth := params.Int("depth")
+	if depth == 0 {
+		depth = 1 << 30 // effectively unlimited
+	}
+
+	// Root in full.
+	q := url.Values{}
+	q.Set("fields", articleFields)
+	var root map[string]any
+	if err := s.http.GetJSON(ctx, "/api/articles/"+url.PathEscape(id), q, &root); err != nil {
+		return nil, err
+	}
+
+	tree, err := walkArticleChildren(ctx, s.http, id, depth)
+	if err != nil {
+		return nil, err
+	}
+	// Replace the inline childArticles (medium fields) with the short
+	// recursive tree so the response has one canonical "children" key.
+	delete(root, "childArticles")
+	root["children"] = tree
+	return root, nil
+}
+
+func walkArticleChildren(ctx context.Context, cli *httptr.Client, parentID string, depth int) ([]articleNode, error) {
+	if depth <= 0 {
+		return nil, nil
+	}
+	q := url.Values{}
+	q.Set("fields", "idReadable,summary,hasChildren")
+	q.Set("$top", "500")
+	var raw []struct {
+		IDReadable  string `json:"idReadable"`
+		Summary     string `json:"summary"`
+		HasChildren bool   `json:"hasChildren"`
+	}
+	if err := cli.GetJSON(ctx, "/api/articles/"+url.PathEscape(parentID)+"/childArticles", q, &raw); err != nil {
+		return nil, fmt.Errorf("walk %s: %w", parentID, err)
+	}
+	out := make([]articleNode, 0, len(raw))
+	for _, c := range raw {
+		node := articleNode{ID: c.IDReadable, Summary: c.Summary}
+		if c.HasChildren {
+			grand, err := walkArticleChildren(ctx, cli, c.IDReadable, depth-1)
+			if err != nil {
+				return nil, err
+			}
+			node.Children = grand
+		}
+		out = append(out, node)
+	}
+	return out, nil
+}
+
+// ── list-child-articles ───────────────────────────────────────────────────
+
+type listChildArticlesAction struct{}
+
+func (listChildArticlesAction) Name() string         { return "list-child-articles" }
+func (listChildArticlesAction) DisplayName() string  { return "List child articles" }
+func (listChildArticlesAction) Description() string  { return "Sub-articles of an article (one level)." }
+func (listChildArticlesAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true, Description: "Parent article id."},
+		{Name: "fields", Kind: connector.FieldString, Default: articleFields},
+	}}
+}
+
+func (a listChildArticlesAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	q := url.Values{}
+	q.Set("fields", params.String("fields"))
+	q.Set("$top", "200")
+	var out []map[string]any
+	if err := s.http.GetJSON(ctx, "/api/articles/"+url.PathEscape(id)+"/childArticles", q, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── create-article ────────────────────────────────────────────────────────
+
+type createArticleAction struct{}
+
+func (createArticleAction) Name() string         { return "create-article" }
+func (createArticleAction) DisplayName() string  { return "Create article" }
+func (createArticleAction) Description() string  { return "Create a knowledge-base article. parent_article makes it a sub-article." }
+func (createArticleAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "project_key", Kind: connector.FieldString, Required: true, Description: "Project shortName or id."},
+		{Name: "summary", Kind: connector.FieldString, Required: true, Description: "Title."},
+		{Name: "content", Kind: connector.FieldLongText, Description: "Markdown body."},
+		{Name: "parent_article", Kind: connector.FieldString, Description: "Parent article id (readable or internal) — makes this a sub-article."},
+	}}
+}
+
+func (a createArticleAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	pk := params.String("project_key")
+	summary := params.String("summary")
+	if pk == "" || summary == "" {
+		return nil, errors.New("project_key and summary are required")
+	}
+	projectID, err := resolveProjectID(ctx, s.http, pk)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{
+		"project": map[string]any{"id": projectID},
+		"summary": summary,
+	}
+	if c := params.String("content"); c != "" {
+		body["content"] = c
+	}
+	if p := params.String("parent_article"); p != "" {
+		parentID, perr := resolveArticleID(ctx, s.http, p)
+		if perr != nil {
+			return nil, fmt.Errorf("parent_article: %w", perr)
+		}
+		body["parentArticle"] = map[string]any{"id": parentID}
+	}
+	q := url.Values{}
+	q.Set("fields", articleFields)
+	var out map[string]any
+	if err := s.http.PostJSON(ctx, "/api/articles?"+q.Encode(), body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── update-article ────────────────────────────────────────────────────────
+//
+// YouTrack uses POST /api/articles/{id} for updates (not PUT). Only the
+// supplied fields are changed; others left alone.
+
+type updateArticleAction struct{}
+
+func (updateArticleAction) Name() string         { return "update-article" }
+func (updateArticleAction) DisplayName() string  { return "Update article" }
+func (updateArticleAction) Description() string  { return "Modify summary and/or content. Only the supplied fields are changed." }
+func (updateArticleAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true},
+		{Name: "summary", Kind: connector.FieldString, Description: "New title (omit to leave unchanged)."},
+		{Name: "content", Kind: connector.FieldLongText, Description: "New markdown body (omit to leave unchanged)."},
+	}}
+}
+
+func (a updateArticleAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	body := map[string]any{}
+	if v := params.String("summary"); v != "" {
+		body["summary"] = v
+	}
+	if v := params.String("content"); v != "" {
+		body["content"] = v
+	}
+	if len(body) == 0 {
+		return nil, errors.New("at least one of summary or content must be set")
+	}
+	q := url.Values{}
+	q.Set("fields", articleFields)
+	var out map[string]any
+	if err := s.http.PostJSON(ctx, "/api/articles/"+url.PathEscape(id)+"?"+q.Encode(), body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── delete-article ────────────────────────────────────────────────────────
+
+type deleteArticleAction struct{}
+
+func (deleteArticleAction) Name() string         { return "delete-article" }
+func (deleteArticleAction) DisplayName() string  { return "Delete article" }
+func (deleteArticleAction) Description() string  { return "Permanently delete an article. Children are deleted too." }
+func (deleteArticleAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true},
+	}}
+}
+
+func (a deleteArticleAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	resp, err := s.http.Do(ctx, "DELETE", "/api/articles/"+url.PathEscape(id), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("delete: http %d: %s", resp.StatusCode, string(body))
+	}
+	return map[string]any{"deleted": true, "id": id}, nil
+}
+
+// ── link-issues ───────────────────────────────────────────────────────────
+//
+// Generic "create a link between two issues". YouTrack link types include
+// Subtask (parent ↔ child), Relates (peer), Duplicates, Depends.
+//
+// Direction semantics (using Subtask as example):
+//   OUTWARD: source is parent, target is subtask  →  source "parent for" target
+//   INWARD : source is subtask, target is parent  →  source "subtask of" target
+
+type linkIssuesAction struct{}
+
+func (linkIssuesAction) Name() string         { return "link-issues" }
+func (linkIssuesAction) DisplayName() string  { return "Link issues" }
+func (linkIssuesAction) Description() string  { return "Create a link between two issues. Default Subtask/OUTWARD makes target a child of source." }
+func (linkIssuesAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "issue", Kind: connector.FieldString, Required: true, Description: "Source issue id."},
+		{Name: "target", Kind: connector.FieldString, Required: true, Description: "Target issue id."},
+		{Name: "link_type", Kind: connector.FieldString, Default: "Subtask",
+			Description: "Subtask | Relates | Depends | Duplicates."},
+		{Name: "direction", Kind: connector.FieldEnum, Default: "OUTWARD",
+			Options: []connector.EnumOption{
+				{Value: "OUTWARD", Label: "Outward (source is parent / Relates from / Depends from)"},
+				{Value: "INWARD", Label: "Inward (source is child / Relates to / Depends on)"},
+				{Value: "BOTH", Label: "Both (symmetric link types only)"},
+			}},
+	}}
+}
+
+func (a linkIssuesAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	issue := params.String("issue")
+	target := params.String("target")
+	if issue == "" || target == "" {
+		return nil, errors.New("issue and target are required")
+	}
+	body := map[string]any{
+		"linkType":  map[string]any{"name": params.String("link_type")},
+		"direction": params.String("direction"),
+		"issues":    []map[string]any{{"idReadable": target}},
+	}
+	q := url.Values{}
+	q.Set("fields", "id,direction,linkType(name),issues(idReadable,summary)")
+	var out map[string]any
+	path := "/api/issues/" + url.PathEscape(issue) + "/links?" + q.Encode()
+	if err := s.http.PostJSON(ctx, path, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ── list-issue-links ──────────────────────────────────────────────────────
+
+type listIssueLinksAction struct{}
+
+func (listIssueLinksAction) Name() string         { return "list-issue-links" }
+func (listIssueLinksAction) DisplayName() string  { return "List issue links" }
+func (listIssueLinksAction) Description() string  { return "All links on an issue: subtasks, parents, relates, depends, duplicates." }
+func (listIssueLinksAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "issue", Kind: connector.FieldString, Required: true},
+	}}
+}
+
+func (a listIssueLinksAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	issue := params.String("issue")
+	if issue == "" {
+		return nil, errors.New("issue is required")
+	}
+	q := url.Values{}
+	q.Set("fields", "id,direction,linkType(name,sourceToTarget,targetToSource),issues(idReadable,summary)")
+	var out []map[string]any
+	if err := s.http.GetJSON(ctx, "/api/issues/"+url.PathEscape(issue)+"/links", q, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ── add-comment ───────────────────────────────────────────────────────────
 
 type addCommentAction struct{}
@@ -883,6 +1309,8 @@ func (createIssueAction) Schema() connector.Schema {
 		{Name: "summary", Kind: connector.FieldString, Required: true},
 		{Name: "description", Kind: connector.FieldLongText},
 		{Name: "assignee_login", Kind: connector.FieldString, Description: "Set the Assignee custom field by user login."},
+		{Name: "parent_issue", Kind: connector.FieldString,
+			Description: "If set, the new issue is created and then linked as a Subtask of this parent (e.g. PGFT-9)."},
 	}}
 }
 
@@ -917,6 +1345,27 @@ func (a createIssueAction) Run(ctx context.Context, sess connector.Session, para
 	var out map[string]any
 	if err := s.http.PostJSON(ctx, "/api/issues?"+q.Encode(), body, &out); err != nil {
 		return nil, err
+	}
+	// Optional: link as a subtask of an existing parent in one shot.
+	if parent := params.String("parent_issue"); parent != "" {
+		newID, _ := out["idReadable"].(string)
+		if newID == "" {
+			if v, ok := out["id"].(string); ok {
+				newID = v
+			}
+		}
+		linkBody := map[string]any{
+			"linkType":  map[string]any{"name": "Subtask"},
+			"direction": "OUTWARD",
+			"issues":    []map[string]any{{"idReadable": newID}},
+		}
+		linkPath := "/api/issues/" + url.PathEscape(parent) + "/links"
+		var linkOut map[string]any
+		if err := s.http.PostJSON(ctx, linkPath, linkBody, &linkOut); err != nil {
+			out["_link_error"] = err.Error()
+		} else {
+			out["_parent_issue"] = parent
+		}
 	}
 	return out, nil
 }

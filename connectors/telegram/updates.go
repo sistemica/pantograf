@@ -167,7 +167,7 @@ func (t messagesTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 		}
 	}
 
-	backoff := newBackoff(time.Second, 30*time.Second)
+	backoff := httptr.NewBackoff(time.Second, 30*time.Second)
 	for {
 		select {
 		case <-ctx.Done():
@@ -180,7 +180,7 @@ func (t messagesTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			d := backoff.next()
+			d := backoff.Next()
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -188,7 +188,7 @@ func (t messagesTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 			}
 			continue
 		}
-		backoff.reset()
+		backoff.Reset()
 
 		for _, u := range ups {
 			kind, payload := u.kind()
@@ -255,23 +255,3 @@ func splitCSV(in []string) []string {
 	return out
 }
 
-// backoff is a tiny exponential helper for long-poll error recovery.
-// 1s → 2s → 4s → 8s → 16s → 30s (capped).
-type backoff struct {
-	cur, init, max time.Duration
-}
-
-func newBackoff(initial, max time.Duration) *backoff {
-	return &backoff{cur: initial, init: initial, max: max}
-}
-
-func (b *backoff) next() time.Duration {
-	d := b.cur
-	b.cur *= 2
-	if b.cur > b.max {
-		b.cur = b.max
-	}
-	return d
-}
-
-func (b *backoff) reset() { b.cur = b.init }

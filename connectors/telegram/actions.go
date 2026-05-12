@@ -28,7 +28,7 @@ func post(ctx context.Context, cli *httptr.Client, method string, body, out any)
 		ErrorCode   int             `json:"error_code"`
 		Result      any             `json:"result"`
 	}{Result: out}
-	if err := cli.PostJSON(ctx, "/"+method, body, &wrap); err != nil {
+	if err := cli.SendJSON(ctx, "POST", "/"+method, body, &wrap); err != nil {
 		return err
 	}
 	if !wrap.OK {

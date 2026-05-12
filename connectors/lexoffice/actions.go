@@ -8,42 +8,17 @@ import (
 	stdhttp "net/http"
 	"net/url"
 	"os"
-	"time"
 
 	"github.com/sistemica/pantograf/connector"
 	httptr "github.com/sistemica/pantograf/transport/http"
 )
 
-// retryOn429 wraps an HTTP-bound function. Lexware rate-limits at 2 req/s
-// and returns 429 with a blocking timeframe of "seconds to minutes". We
-// exponential-backoff up to maxAttempts; ctx still drives shutdown.
-//
-// Lexware does not document Retry-After, so pure exponential.
+// retryOn429 is a thin alias over httptr.RetryOn pinned to status 429.
+// Lexware rate-limits at 2 req/s and returns 429 with a blocking
+// timeframe of "seconds to minutes"; the shared helper handles the
+// exponential backoff (600 ms → 30 s capped, 5 attempts).
 func retryOn429(ctx context.Context, fn func() error) error {
-	const maxAttempts = 5
-	delay := 600 * time.Millisecond
-	var lastErr error
-	for i := 0; i < maxAttempts; i++ {
-		err := fn()
-		if err == nil {
-			return nil
-		}
-		var apiErr *httptr.APIError
-		if !errors.As(err, &apiErr) || apiErr.Status != stdhttp.StatusTooManyRequests {
-			return err
-		}
-		lastErr = err
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
-		}
-		delay *= 2
-		if delay > 30*time.Second {
-			delay = 30 * time.Second
-		}
-	}
-	return fmt.Errorf("lexoffice: rate-limited after %d retries: %w", maxAttempts, lastErr)
+	return httptr.RetryOn(ctx, fn, stdhttp.StatusTooManyRequests)
 }
 
 // voucherEndpoint maps a voucherlist row's voucherType to the resource

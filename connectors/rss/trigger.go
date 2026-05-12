@@ -3,10 +3,10 @@ package rss
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/sistemica/pantograf/connector"
+	httptr "github.com/sistemica/pantograf/transport/http"
 )
 
 type newItemsTrigger struct{}
@@ -42,7 +42,7 @@ func (t newItemsTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 	first := true
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	backoff := newBackoff(time.Second, 5*time.Minute)
+	backoff := httptr.NewBackoff(time.Second, 5*time.Minute)
 
 	for {
 		if !first {
@@ -59,7 +59,7 @@ func (t newItemsTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			d := backoff.next()
+			d := backoff.Next()
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -67,7 +67,7 @@ func (t newItemsTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 			}
 			continue
 		}
-		backoff.reset()
+		backoff.Reset()
 
 		watermark, _ := loadWatermark(ctx, s.State())
 		fresh, newWatermark := diffItems(feed, watermark, includeBacklog)
@@ -94,26 +94,3 @@ func (t newItemsTrigger) Subscribe(ctx context.Context, sess connector.Session, 
 	}
 }
 
-// backoff: identical pattern to connectors/telegram/updates.go. Could
-// hoist into a shared package once we have a third copy.
-type backoff struct {
-	cur, init, max time.Duration
-}
-
-func newBackoff(initial, max time.Duration) *backoff {
-	return &backoff{cur: initial, init: initial, max: max}
-}
-
-func (b *backoff) next() time.Duration {
-	d := b.cur
-	b.cur *= 2
-	if b.cur > b.max {
-		b.cur = b.max
-	}
-	return d
-}
-
-func (b *backoff) reset() { b.cur = b.init }
-
-// silence unused import vector if any of the helpers gets stripped later
-var _ = strconv.Itoa

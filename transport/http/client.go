@@ -101,8 +101,14 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	return c.doJSON(req, out)
 }
 
-// PostJSON marshals body as JSON, POSTs it, and unmarshals the response.
-func (c *Client) PostJSON(ctx context.Context, path string, body, out any) error {
+// SendJSON marshals body as JSON, sends with the given method, and
+// unmarshals the response. Use for POST / PUT / PATCH / DELETE-with-body.
+// For GET use GetJSON; for forms / multipart see PostForm / PostMultipart.
+//
+//   SendJSON(ctx, "POST",  path, reqBody, &out)
+//   SendJSON(ctx, "PUT",   path, reqBody, &out)
+//   SendJSON(ctx, "PATCH", path, reqBody, &out)
+func (c *Client) SendJSON(ctx context.Context, method, path string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
@@ -111,7 +117,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, body, out any) error
 		}
 		rdr = bytes.NewReader(buf)
 	}
-	req, err := c.newRequest(ctx, stdhttp.MethodPost, path, nil, rdr, "application/json")
+	req, err := c.newRequest(ctx, method, path, nil, rdr, "application/json")
 	if err != nil {
 		return err
 	}

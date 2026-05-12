@@ -228,7 +228,7 @@ func (a createUserAction) Run(ctx context.Context, sess connector.Session, param
 	q := url.Values{}
 	q.Set("fields", userFields)
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/users?"+q.Encode(), body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/users?"+q.Encode(), body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -350,7 +350,7 @@ func (a createProjectAction) Run(ctx context.Context, sess connector.Session, pa
 	q := url.Values{}
 	q.Set("fields", projectFields)
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/admin/projects?"+q.Encode(), body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/admin/projects?"+q.Encode(), body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -489,7 +489,7 @@ func (a createTokenAction) Run(ctx context.Context, sess connector.Session, para
 	q.Set("fields", "id,name,token,scope(id,name)")
 	var out map[string]any
 	path := "/hub/api/rest/users/" + url.PathEscape(ringID) + "/permanenttokens?" + q.Encode()
-	if err := s.http.PostJSON(ctx, path, body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", path, body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -689,7 +689,7 @@ func (a applyCommandAction) Run(ctx context.Context, sess connector.Session, par
 		body["comment"] = c
 	}
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/commands", body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/commands", body, &out); err != nil {
 		return nil, err
 	}
 	return map[string]any{"applied": cmd, "issues": issues, "result": out}, nil
@@ -724,7 +724,7 @@ func (a setAssigneeAction) Run(ctx context.Context, sess connector.Session, para
 		"silent": params.Bool("silent"),
 	}
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/commands", body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/commands", body, &out); err != nil {
 		return nil, err
 	}
 	return map[string]any{"issue": issue, "assignee": login}, nil
@@ -1099,7 +1099,7 @@ func (a createArticleAction) Run(ctx context.Context, sess connector.Session, pa
 	q := url.Values{}
 	q.Set("fields", articleFields)
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/articles?"+q.Encode(), body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/articles?"+q.Encode(), body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1142,7 +1142,7 @@ func (a updateArticleAction) Run(ctx context.Context, sess connector.Session, pa
 	q := url.Values{}
 	q.Set("fields", articleFields)
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/articles/"+url.PathEscape(id)+"?"+q.Encode(), body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/articles/"+url.PathEscape(id)+"?"+q.Encode(), body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1225,7 +1225,7 @@ func (a linkIssuesAction) Run(ctx context.Context, sess connector.Session, param
 	q.Set("fields", "id,direction,linkType(name),issues(idReadable,summary)")
 	var out map[string]any
 	path := "/api/issues/" + url.PathEscape(issue) + "/links?" + q.Encode()
-	if err := s.http.PostJSON(ctx, path, body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", path, body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1290,7 +1290,7 @@ func (a addCommentAction) Run(ctx context.Context, sess connector.Session, param
 	q.Set("fields", "id,text,usesMarkdown,created,updated,author(login,fullName)")
 	var out map[string]any
 	path := "/api/issues/" + url.PathEscape(issue) + "/comments?" + q.Encode()
-	if err := s.http.PostJSON(ctx, path, body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", path, body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1343,7 +1343,7 @@ func (a createIssueAction) Run(ctx context.Context, sess connector.Session, para
 	q := url.Values{}
 	q.Set("fields", issueFields)
 	var out map[string]any
-	if err := s.http.PostJSON(ctx, "/api/issues?"+q.Encode(), body, &out); err != nil {
+	if err := s.http.SendJSON(ctx, "POST", "/api/issues?"+q.Encode(), body, &out); err != nil {
 		return nil, err
 	}
 	// Optional: link as a subtask of an existing parent in one shot.
@@ -1361,7 +1361,7 @@ func (a createIssueAction) Run(ctx context.Context, sess connector.Session, para
 		}
 		linkPath := "/api/issues/" + url.PathEscape(parent) + "/links"
 		var linkOut map[string]any
-		if err := s.http.PostJSON(ctx, linkPath, linkBody, &linkOut); err != nil {
+		if err := s.http.SendJSON(ctx, "POST", linkPath, linkBody, &linkOut); err != nil {
 			out["_link_error"] = err.Error()
 		} else {
 			out["_parent_issue"] = parent

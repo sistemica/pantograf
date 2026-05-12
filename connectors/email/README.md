@@ -40,6 +40,7 @@ None yet. IMAP IDLE / new-message stream is planned.
 | Fastmail | imap.fastmail.com:993 (TLS) | smtp.fastmail.com:465 (TLS) |
 | GMX | imap.gmx.net:993 (TLS) | mail.gmx.net:587 (STARTTLS) |
 | Gmail | imap.gmail.com:993 (TLS) | smtp.gmail.com:465 (TLS) |
+| Protonmail Bridge | 127.0.0.1:1143 (STARTTLS, self-signed) | 127.0.0.1:1025 (STARTTLS, self-signed) |
 | Custom | manual | manual |
 
 The wizard also fills missing host fields by simple substitution (e.g.

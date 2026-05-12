@@ -11,14 +11,15 @@ import (
 )
 
 const (
-	fEmail        = "email"
-	fPassword     = "password"
-	fImapHost     = "imap_host"
-	fImapPort     = "imap_port"
-	fImapSecurity = "imap_security"
-	fSmtpHost     = "smtp_host"
-	fSmtpPort     = "smtp_port"
-	fSmtpSecurity = "smtp_security"
+	fEmail              = "email"
+	fPassword           = "password"
+	fImapHost           = "imap_host"
+	fImapPort           = "imap_port"
+	fImapSecurity       = "imap_security"
+	fSmtpHost           = "smtp_host"
+	fSmtpPort           = "smtp_port"
+	fSmtpSecurity       = "smtp_security"
+	fInsecureSkipVerify = "insecure_skip_verify"
 )
 
 type credSpec struct{}
@@ -40,6 +41,8 @@ func (credSpec) Schema() connector.Schema {
 		{Name: fSmtpHost, Label: "SMTP host", Kind: connector.FieldString, Required: true},
 		{Name: fSmtpPort, Label: "SMTP port", Kind: connector.FieldInt, Default: 465},
 		{Name: fSmtpSecurity, Label: "SMTP security", Kind: connector.FieldEnum, Options: securityOptions, Default: "tls"},
+		{Name: fInsecureSkipVerify, Label: "Skip TLS certificate verification", Kind: connector.FieldBool, Default: false,
+			Description: "Enable only for self-signed-cert setups (e.g. Protonmail Bridge if its CA isn't installed system-wide)."},
 	}}
 }
 
@@ -67,6 +70,17 @@ func (credSpec) Presets() []connector.Preset {
 			Values: connector.Values{
 				fImapHost: "imap.gmail.com", fImapPort: 993, fImapSecurity: "tls",
 				fSmtpHost: "smtp.gmail.com", fSmtpPort: 465, fSmtpSecurity: "tls",
+			},
+		},
+		{
+			Name:        "Protonmail Bridge",
+			Description: "Local Bridge at 127.0.0.1:1143/1025 (STARTTLS, self-signed cert). Username is the Bridge address; password is the Bridge-generated app password, not your Proton account password.",
+			Values: connector.Values{
+				fImapHost: "127.0.0.1", fImapPort: 1143, fImapSecurity: "starttls",
+				fSmtpHost: "127.0.0.1", fSmtpPort: 1025, fSmtpSecurity: "starttls",
+				// Self-signed Bridge cert. If you've installed the Bridge CA
+				// into the system trust store, turn this off post-wizard.
+				fInsecureSkipVerify: true,
 			},
 		},
 		{
@@ -115,21 +129,23 @@ func (credSpec) Validate(ctx context.Context, c connector.Credential) error {
 func imapConfigFromCred(c connector.Credential) imaptr.Config {
 	v := c.Values
 	return imaptr.Config{
-		Host:     v.String(fImapHost),
-		Port:     v.Int(fImapPort),
-		Security: imaptr.Security(v.String(fImapSecurity)),
-		Username: v.String(fEmail),
-		Password: v.String(fPassword),
+		Host:               v.String(fImapHost),
+		Port:               v.Int(fImapPort),
+		Security:           imaptr.Security(v.String(fImapSecurity)),
+		Username:           v.String(fEmail),
+		Password:           v.String(fPassword),
+		InsecureSkipVerify: v.Bool(fInsecureSkipVerify),
 	}
 }
 
 func smtpConfigFromCred(c connector.Credential) smtptr.Config {
 	v := c.Values
 	return smtptr.Config{
-		Host:     v.String(fSmtpHost),
-		Port:     v.Int(fSmtpPort),
-		Security: smtptr.Security(v.String(fSmtpSecurity)),
-		Username: v.String(fEmail),
-		Password: v.String(fPassword),
+		Host:               v.String(fSmtpHost),
+		Port:               v.Int(fSmtpPort),
+		Security:           smtptr.Security(v.String(fSmtpSecurity)),
+		Username:           v.String(fEmail),
+		Password:           v.String(fPassword),
+		InsecureSkipVerify: v.Bool(fInsecureSkipVerify),
 	}
 }

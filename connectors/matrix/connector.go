@@ -32,7 +32,9 @@ func (Connector) Descriptor() connector.Descriptor {
 
 func (Connector) Credential() connector.CredentialSpec { return credSpec{} }
 
-func (Connector) Triggers() []connector.Trigger { return nil }
+func (Connector) Triggers() []connector.Trigger {
+	return []connector.Trigger{messagesTrigger{}}
+}
 
 func (Connector) Actions() []connector.Action {
 	return []connector.Action{

@@ -44,6 +44,11 @@ type Client struct {
 // build a sibling client with a different timeout or header set.
 func (c *Client) BaseURL() string { return c.cfg.BaseURL }
 
+// Headers returns the per-request default headers. Used by triggers that
+// build a sibling client with a longer Timeout (long-poll) but want the
+// same auth headers.
+func (c *Client) Headers() stdhttp.Header { return c.cfg.Headers }
+
 // New returns a Client. Config.BaseURL is validated up-front.
 func New(cfg Config) (*Client, error) {
 	if cfg.BaseURL == "" {

@@ -3,3 +3,7 @@
 *.test
 *.out
 pgf
+
+# Private examples — drop org-specific or personal versions of public
+# examples here. Mirrors examples/ layout but never gets committed.
+examples/private/

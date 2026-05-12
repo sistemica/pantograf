@@ -14,6 +14,7 @@ import (
 	"github.com/sistemica/pantograf/connector"
 	emailpkg "github.com/sistemica/pantograf/connectors/email"
 	lexofficepkg "github.com/sistemica/pantograf/connectors/lexoffice"
+	llmpkg "github.com/sistemica/pantograf/connectors/llm"
 	matrixpkg "github.com/sistemica/pantograf/connectors/matrix"
 	rsspkg "github.com/sistemica/pantograf/connectors/rss"
 	telegrampkg "github.com/sistemica/pantograf/connectors/telegram"
@@ -37,6 +38,7 @@ func init() {
 		rsspkg.Register,
 		youtrackpkg.Register,
 		matrixpkg.Register,
+		llmpkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)

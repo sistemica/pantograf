@@ -5,15 +5,14 @@
 > infrastructure to moving consumers.
 
 **pantograf** is a Go connector framework. One reusable library defines the
-contract; many consumers — a CLI, an HTTP server, a Telegram bot, your own
-program — plug into the same set of connectors and get the same actions,
-triggers, credential wizard, encrypted-at-rest credential store, and
-per-instance state store for free.
+contract; many consumers — a CLI, an HTTP server, a webhook receiver, your
+own program — plug into the same set of connectors and get the same
+actions, triggers, credential wizard, encrypted-at-rest credential store,
+and per-instance state store for free.
 
-The design is borrowed from the convergent patterns of Apache Camel,
-Conduit, n8n, Activepieces, and Airbyte's CDK, then translated into
-idiomatic Go: struct + slice + interface, no reflect, explicit registry,
-no magic.
+The design borrows from the convergent patterns of Apache Camel, Conduit,
+n8n, Activepieces, and Airbyte's CDK, translated into idiomatic Go:
+struct + slice + interface, no reflect, explicit registry, no magic.
 
 ## The idea in one diagram
 
@@ -21,7 +20,7 @@ no magic.
     ┌──────────────────────────────────────────────────────────────────┐
     │ Consumers (any program importing the library)                    │
     │                                                                  │
-    │   pgf CLI    │    HTTP server   │   MCP server    │   your code  │
+    │   pgf CLI    │   HTTP server    │   MCP server    │   your code  │
     └──────────────┼──────────────────┼─────────────────┼──────────────┘
                    │                  │                 │
                    └──────────────────┴─────────────────┘
@@ -29,22 +28,22 @@ no magic.
     ┌─────────────────────────────────┴────────────────────────────────┐
     │ Runtime                                                          │
     │   • Registry              connector lookup by name               │
-    │   • Credential store      yamlstore  (encrypted secrets)         │
-    │   • State store           fsstore    (per-instance KV)           │
+    │   • Credential store      yamlstore   (encrypted secrets)        │
+    │   • State store           fsstore     (per-instance KV)          │
     │   • Wizard                schema-driven, validates live          │
-    │   • pgf serve              webhook multiplexer                    │
+    │   • pgf serve             webhook multiplexer                    │
     └──────────────────────────────────┬───────────────────────────────┘
                                        │
     ┌──────────────────────────────────┴───────────────────────────────┐
     │ Connectors (vendor abstractions)                                 │
     │                                                                  │
-    │   email       │   telegram    │   webhook     │   ...future...   │
-    └───────┬───────┴───────┬───────┴───────┬───────┴──────────────────┘
-            │               │               │
-    ┌───────┴───────────────┴───────────────┴──────────────────────────┐
+    │   email   │   telegram   │   matrix   │   llm   │ ...future...   │
+    └───────┬───────────┬───────────┬───────────┬──────────────────────┘
+            │           │           │           │
+    ┌───────┴───────────┴───────────┴───────────┴──────────────────────┐
     │ Transports (wire-protocol clients, vendor-neutral)               │
     │                                                                  │
-    │   imap        │   smtp        │   http        │                  │
+    │   imap        │        smtp        │        http                 │
     └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -87,14 +86,14 @@ type WebhookTrigger interface {    // Webhook
 
 | Name | Actions | Triggers | Notes |
 |---|---|---|---|
-| [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail/GMX/Gmail/Custom), multipart parsing, encrypted-at-rest creds |
+| [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail / GMX / Gmail / Protonmail Bridge / Custom), multipart parsing, encrypted-at-rest creds |
 | [telegram](connectors/telegram/README.md) | get-me / get-updates / send-message / send-photo / send-document / set-webhook / delete-webhook / get-webhook-info | messages (polling, persistent offset) | Bot API |
-| [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff |
+| [matrix](connectors/matrix/README.md) | whoami / list-rooms / get-room / send-message / get-messages | messages (polling /sync, persistent next_batch) | Matrix C-S API. Bearer auth, login fallback that exchanges password→token at Validate and discards the password. |
 | [llm](connectors/llm/README.md) | list-models / chat-completion / embed | — | OpenAI-compatible. Reasoning channel + tool calls pass-through. 10-min HTTP timeout for long thinking calls. |
-| [matrix](connectors/matrix/README.md) | whoami / list-rooms / get-room / send-message / get-messages | messages (polling /sync, persistent next_batch) | Matrix C-S API. Bearer auth, login fallback that exchanges password→token at Validate and discards password. |
-| [rss](connectors/rss/README.md) | fetch / list-new / mark-seen / info / reset | new-items (polling, persistent watermark) | Stateful RSS/Atom/JSON Feed reader. Skips backlog by default; `include_backlog=true` for first-run flush. |
-| [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs |
-| [youtrack](connectors/youtrack/README.md) | me / users / projects / issues / comments / attachments / `apply-command` (universal field setter) / create-token | — | JetBrains issue tracker. Multi-user via one instance per user-token. Hub permanent tokens. |
+| [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs. |
+| [rss](connectors/rss/README.md) | fetch / list-new / mark-seen / info / reset | new-items (polling, persistent watermark) | Stateful RSS / Atom / JSON Feed reader. Skips backlog by default. |
+| [youtrack](connectors/youtrack/README.md) | me / users / projects / issues (CRUD + comments + attachments + state) / articles (CRUD + tree) / `apply-command` (universal field setter) / create-token | — | JetBrains issue tracker. Multi-user via one instance per user-token. Hub permanent tokens. |
+| [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff. |
 
 ### Transports
 
@@ -102,88 +101,153 @@ type WebhookTrigger interface {    // Webhook
 |---|---|
 | [transport/imap](transport/imap/README.md) | Dial + LOGIN, returns raw `*imapclient.Client` |
 | [transport/smtp](transport/smtp/README.md) | Send + Probe (auth-only check) |
-| [transport/http](transport/http/README.md) | JSON / form / multipart helpers, with explicit URL composition |
+| [transport/http](transport/http/README.md) | JSON / form / multipart helpers with explicit URL composition; Backoff + RetryOn helpers |
 
 ### Runtime support
 
 | Package | Purpose |
 |---|---|
 | `connector` | the contract: Connector, Action, Trigger, Session, Schema, Values, Registry |
-| `storage`, `storage/yamlstore` | credential persistence (one YAML per instance) |
-| `state`, `state/fsstore` | per-instance KV state for triggers (offsets, cursors) |
+| `storage` / `storage/yamlstore` | credential persistence (one YAML per instance) |
+| `state` / `state/fsstore` | per-instance KV state for triggers (offsets, cursors) |
 | `secrets` | NaCl-secretbox at-rest encryption, master key on disk |
 | `cmd/pgf` | the reference CLI consumer |
 
 ## Quick start
 
 ```bash
-go build -o ~/.local/bin/pgf ./cmd/pgf
+go install github.com/sistemica/pantograf/cmd/pgf@latest
 
-# 1. Connect Fastmail (wizard runs IMAP+SMTP probe; password sealed at rest)
-pgf connect email sistemica
-pgf run email/sistemica list-folders
-pgf run email/sistemica send-email -p to=foo@bar.com -p subject=hi -p body=hello
+# Browse what's available
+pgf connectors
+pgf actions email
+pgf triggers telegram
 
-# 2. Connect a Telegram bot, stream incoming messages
-pgf connect telegram personal
-pgf watch telegram/personal messages   # blocks; emits NDJSON to stdout
+# Add a credential (interactive wizard) — schema-driven prompts
+pgf connect email inbox            # prompts for IMAP/SMTP host + creds
 
-# 3. Generic webhook receiver — Stripe, GitHub, IoT, anything
-pgf connect webhook github-repo        # wizard sets HMAC config
-pgf serve --addr :8080 --public-url https://my.host
-# event NDJSON streams as inbound POSTs arrive
+# Or non-interactively (good for CI / containers)
+pgf connect --input '{
+  "email": "you@example.com",
+  "password": "...",
+  "imap_host": "imap.example.com", "imap_port": 993, "imap_security": "tls",
+  "smtp_host": "smtp.example.com", "smtp_port": 465, "smtp_security": "tls"
+}' email inbox
+
+# Use it
+pgf run email/inbox list-folders
+pgf run email/inbox send-email -p to=foo@bar.com -p subject=hi -p body=hello
+
+# Stream a polling trigger to stdout (NDJSON) — pipe wherever
+pgf run telegram/personal get-me
+pgf watch telegram/personal messages > /tmp/events.ndjson
+
+# Host all webhook triggers on a single port
+pgf serve --addr :8080 --public-url https://your-host.example.com
 ```
+
+Storage layout (XDG-compliant):
+
+```
+~/.config/pgf/master.key                          # 32-byte NaCl key, mode 0600
+~/.config/pgf/instances/<type>/<name>.yaml        # one per instance, secret fields sealed
+~/.local/state/pgf/state/<type>/<name>/...        # per-instance trigger state
+```
+
+Override paths via `PGF_KEY_DIR`, `PGF_STORE_DIR`, `PGF_STATE_DIR`.
+
+## Examples
+
+End-to-end workflows composed from the bundled connectors live in
+[`examples/`](examples/):
+
+| Example | What it does |
+|---|---|
+| [triage-emails](examples/triage-emails/) | bash + jq: read inbox → LLM classifies "bug report?" → files matching ones as YouTrack issues |
 
 ## Design decisions worth knowing
 
 | Decision | Why |
 |---|---|
-| **No reflect.** Schemas are hand-written `[]FieldSpec` slices. | Predictable, debuggable, no struct-tag magic. Codegen could generate these later if needed; for now hand-written is fine. |
+| **No reflect.** Schemas are hand-written `[]FieldSpec` slices. | Predictable, debuggable, no struct-tag magic. Codegen could generate these later if boilerplate grows. |
 | **Connector contract is small (~5 methods).** Triggers split into two sub-interfaces by strategy. | Adding a new connector is a directory + a `Register` call. No build-time scaffolding. |
 | **Credentials are first-class with `Validate(ctx, cred)`.** | Wizard probes live service before saving — catches bad creds at setup, not at first action. |
 | **Vendor knowledge lives as data (`Presets`).** | "Fastmail" isn't a connector — it's a 6-line `Preset` entry inside the email connector's credential spec. |
 | **State store is per-instance, separate from credentials.** | Triggers can persist offsets/cursors; restart resumes cleanly. Telegram's `messages` trigger demonstrates this. |
-| **Secrets encrypted at rest.** | NaCl secretbox with key on disk (mode 0600). Marked at runtime by the `sealed:` prefix; legacy plaintext still works during migration. |
+| **Secrets encrypted at rest.** | NaCl secretbox with key on disk (mode 0600). Sealed values marked at runtime by the `sealed:` prefix; legacy plaintext still works during migration. |
 | **`pgf serve` is a webhook multiplexer.** | One process, mounts every webhook trigger across every instance under `/<type>/<name>/<trigger>`. NDJSON to stdout. |
-| **HTTP URL composition uses explicit slash handling, not `url.ResolveReference`.** | A non-trivial BaseURL path (e.g. Telegram's `/bot<token>`) gets clobbered when the relative path starts with `/`. We hit that bug; documented in `transport/http/README.md`. |
+| **HTTP URL composition uses explicit slash handling, not `url.ResolveReference`.** | A non-trivial BaseURL path (e.g. Telegram's `/bot<token>`) gets clobbered when the relative path starts with `/`. We hit that; documented in `transport/http/README.md`. |
+| **One CLI consumer, but the library is multi-consumer.** | `cmd/pgf` is the reference. An HTTP gateway, an MCP server, or your own Go program can all import the connector library and reuse the same instances/state/encryption. |
 
-## Roadmap
+## Adding a connector
 
-Confirmed-working today (real E2E tested in development):
+A new connector is a directory with three files plus a one-line registration:
 
-- Email: Fastmail (Sistemica account) — wizard, list/read/search/draft/send/attachments, byte-perfect attachment round-trip
-- Telegram: getMe, send-message, send-photo, send-document
-- Telegram messages trigger: long-poll + persistent offset (verified resume across restart)
-- Generic webhook: GET / POST JSON / POST form / PUT, HMAC-SHA256 (LemonSqueezy + GitHub-prefix), API-key auth, response_file read at request time
+```
+connectors/yourthing/
+├── credentials.go          # CredentialSpec — fields, presets, Validate probe
+├── connector.go            # Descriptor + Open + session struct
+└── actions.go              # one type per action implementing connector.Action
+```
 
-Open follow-ups:
+Then in `cmd/pgf/main.go`:
 
-- IMAP IDLE trigger for email
-- `delete_message` / `move_message` email actions
-- Stripe / Slack timestamp-prefixed signatures (`t=...,v1=...`)
-- Cross-instance credential sharing (avoid re-typing the same password for two instances)
-- OAuth2 wizard (Gmail, Calendar)
-- More connectors (HubSpot, GitHub, IBKR, ...)
+```go
+import yourthingpkg "github.com/sistemica/pantograf/connectors/yourthing"
+// ...
+yourthingpkg.Register(connector.Default)
+```
+
+That's it. The new connector immediately appears in `pgf connectors`,
+its action schemas are introspectable, the wizard works, credentials
+are encrypted, instances live alongside the others. The per-connector
+READMEs in `connectors/*/` document the contract more concretely.
 
 ## Layout
 
 ```
 pantograf/
-├── connector/                 # the contract (no reflect)
-├── secrets/                   # at-rest encryption
-├── state/  state/fsstore/     # per-instance KV
-├── storage/  storage/yamlstore/  # credential persistence
+├── connector/                   # the contract (no reflect)
+├── secrets/                     # at-rest encryption (NaCl secretbox)
+├── state/  state/fsstore/       # per-instance KV
+├── storage/  storage/yamlstore/ # credential persistence
 ├── transport/
-│   ├── http/                  # generic HTTP client
-│   ├── imap/                  # IMAP wrapper
-│   └── smtp/                  # SMTP wrapper
+│   ├── http/                    # generic HTTP client + retry helpers
+│   ├── imap/                    # IMAP wrapper
+│   └── smtp/                    # SMTP wrapper
 ├── connectors/
-│   ├── email/                 # IMAP + SMTP
-│   ├── telegram/              # Bot API
-│   └── webhook/               # generic HTTP-in
-└── cmd/pgf/                   # the reference CLI
+│   ├── email/                   # IMAP + SMTP
+│   ├── telegram/                # Bot API
+│   ├── matrix/                  # Matrix C-S API
+│   ├── llm/                     # OpenAI-compatible
+│   ├── webhook/                 # generic HTTP-in
+│   ├── rss/                     # feed reader
+│   ├── youtrack/                # JetBrains
+│   └── lexoffice/               # Lexware Office
+├── examples/                    # runnable workflows
+└── cmd/pgf/                     # the reference CLI
 ```
+
+## Roadmap
+
+Confirmed-working today (real E2E tested in development):
+
+- email: Fastmail / Protonmail Bridge — wizard, list/read/search/draft/send, attachments, multipart parsing, byte-perfect attachment round-trip
+- telegram: full Bot API surface + persistent-offset `messages` trigger (verified resume across restart)
+- matrix: send/read + long-poll `/sync` trigger with persistent `next_batch`
+- llm: reasoning + tool calls round-trip against an OpenAI-compatible endpoint
+- webhook: GET / POST / PUT, HMAC-SHA256 (LemonSqueezy + GitHub-prefix), API-key auth, response-file read at request time
+- youtrack: ~30 actions across users / projects / issues / articles / comments / attachments
+- lexoffice: read path against the live Lexware API; byte-perfect PDF download
+
+Open follow-ups:
+
+- IMAP IDLE trigger for email
+- `delete-message` / `move-message` email actions
+- Stripe / Slack timestamp-prefixed signatures (`t=...,v1=...`)
+- OAuth2 wizard path (Gmail, Google Calendar)
+- More connectors as concrete use cases appear
 
 ## License
 
-— (TBD)
+Apache 2.0

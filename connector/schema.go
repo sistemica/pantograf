@@ -24,6 +24,40 @@ type FieldSpec struct {
 	Required    bool
 	Default     any
 	Options     []EnumOption
+
+	// IsPath marks the field's value as a local filesystem path. When set,
+	// the runtime validates the value against PGF_ALLOWED_PATHS before the
+	// action or credential is allowed to run. Use for any field whose
+	// value reaches os.Open / os.Create / io.Copy / equivalents — agents
+	// can otherwise abuse such fields to exfiltrate the credential dir
+	// even when sudo is restricted to the pgf binary.
+	//
+	// Works with FieldString and FieldStringList. Dual-mode fields (path
+	// OR URL, e.g. Telegram media) leave this false and validate inside
+	// the connector when the value is path-shaped.
+	IsPath bool
+
+	// ShowWhen is an optional predicate that controls whether the field is
+	// active for a given set of already-collected values. The wizard skips
+	// the prompt when this returns false, the paths validator skips the
+	// check, and Required-ness is suspended. Used to gate driver-specific
+	// fields (e.g. an OAuth `refresh_token` field that only matters when
+	// auth_mode=oauth). When nil, the field is always active.
+	//
+	// Predicates should be deterministic and side-effect-free. They see the
+	// values collected so far, so ordering matters — list the discriminator
+	// field (the one ShowWhen reads) before any dependent fields.
+	ShowWhen func(Values) bool
+}
+
+// IsActive reports whether the field should be prompted / validated /
+// required given the values gathered so far. Fields without ShowWhen are
+// always active.
+func (f FieldSpec) IsActive(v Values) bool {
+	if f.ShowWhen == nil {
+		return true
+	}
+	return f.ShowWhen(v)
 }
 
 type EnumOption struct {

@@ -2,7 +2,11 @@
 /cmd/mw/mw
 *.test
 *.out
-pgf
+# The built binaries — anchored to their exact build locations. An
+# unanchored `pgf` would also match every file in any `pgf/` directory
+# (including legitimate sources like cmd/pgf/webhooks.go).
+/pgf
+/cmd/pgf/pgf
 
 # Private examples — drop org-specific or personal versions of public
 # examples here. Mirrors examples/ layout but never gets committed.

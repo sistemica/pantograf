@@ -1,7 +1,7 @@
 // Package secrets manages the master key and field-level encryption used by
 // the storage backends. Format: a NaCl secretbox sealed with a 32-byte key
 // derived once and persisted at ~/.config/pgf/master.key (overridable via
-// MW_MASTER_KEY env var holding base64).
+// PGF_MASTER_KEY env var holding base64).
 //
 // Sealed values are base64-encoded ciphertext prefixed with "sealed:" so a
 // reader can tell at a glance and so the same field can hold legacy
@@ -23,7 +23,7 @@ import (
 
 const (
 	sealedPrefix = "sealed:"
-	keyEnv       = "MW_MASTER_KEY"
+	keyEnv       = "PGF_MASTER_KEY"
 	keyDirEnv    = "PGF_KEY_DIR"
 )
 

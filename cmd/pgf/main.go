@@ -12,13 +12,18 @@ import (
 	"syscall"
 
 	"github.com/sistemica/pantograf/connector"
+	bunnypkg "github.com/sistemica/pantograf/connectors/bunny"
 	emailpkg "github.com/sistemica/pantograf/connectors/email"
+	filepkg "github.com/sistemica/pantograf/connectors/file"
+	jinapkg "github.com/sistemica/pantograf/connectors/jina"
 	lexofficepkg "github.com/sistemica/pantograf/connectors/lexoffice"
 	llmpkg "github.com/sistemica/pantograf/connectors/llm"
 	matrixpkg "github.com/sistemica/pantograf/connectors/matrix"
 	rsspkg "github.com/sistemica/pantograf/connectors/rss"
 	telegrampkg "github.com/sistemica/pantograf/connectors/telegram"
+	webpkg "github.com/sistemica/pantograf/connectors/web"
 	webhookpkg "github.com/sistemica/pantograf/connectors/webhook"
+	whisperpkg "github.com/sistemica/pantograf/connectors/whisper"
 	youtrackpkg "github.com/sistemica/pantograf/connectors/youtrack"
 	"github.com/sistemica/pantograf/secrets"
 	"github.com/sistemica/pantograf/state"
@@ -39,6 +44,11 @@ func init() {
 		youtrackpkg.Register,
 		matrixpkg.Register,
 		llmpkg.Register,
+		whisperpkg.Register,
+		webpkg.Register,
+		jinapkg.Register,
+		filepkg.Register,
+		bunnypkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)
@@ -57,14 +67,17 @@ Usage:
   pgf rm <type>/<name>                   Remove an instance
   pgf run <type>/<name> <action> [-p k=v ...]    Execute an action
   pgf watch <type>/<name> <trigger> [-p k=v ...] Subscribe to a streaming trigger; events as NDJSON
-  pgf serve [flags] [<type>/<name>:<trigger> ...]
-                                         Host webhook triggers (multiplexed)
+  pgf serve [--addr host:port] [--auth-token tok]
+                                         Run pgf as an HTTP JSON-RPC daemon (matches memo/shellac serve shape)
+  pgf webhooks [flags] [<type>/<name>:<trigger> ...]
+                                         Host webhook triggers (multiplexed) — inbound side
 
 Examples:
   pgf connect email personal
   pgf run email/personal read-emails -p folder=INBOX -p limit=5
   pgf watch telegram/personal messages
-  pgf serve --addr :8080 --public-url https://my.host
+  pgf webhooks --addr :8080 --public-url https://my.host
+  pgf serve --addr 127.0.0.1:8765 --auth-token "$PGF_TOK"
 `
 
 func main() {
@@ -106,6 +119,8 @@ func main() {
 		cmdWatch(ctx, store, vault, stateMgr, args)
 	case "serve":
 		cmdServe(ctx, store, vault, stateMgr, args)
+	case "webhooks":
+		cmdWebhooks(ctx, store, vault, stateMgr, args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -231,6 +246,13 @@ func cmdConnect(ctx context.Context, store storage.Store, vault *secrets.Vault, 
 		}
 	}
 
+	// Path whitelist check (e.g. webhook response_file must be under
+	// PGF_ALLOWED_PATHS, otherwise an agent could request files outside
+	// its sandbox at every webhook hit).
+	if err := validatePaths(c.Credential().Schema(), cred.Values, "credential "+typ+"/"+name); err != nil {
+		fail(err)
+	}
+
 	sealed, err := secrets.SealValues(vault, c.Credential().Schema(), cred.Values)
 	if err != nil {
 		fail(err)
@@ -309,6 +331,12 @@ func cmdRun(ctx context.Context, store storage.Store, vault *secrets.Vault, stat
 		fail(err)
 	}
 	cred.Values = opened
+
+	// Path whitelist check on action params. PGF_ALLOWED_PATHS-gated;
+	// no-op when unset.
+	if err := validatePaths(action.Schema(), params, fmt.Sprintf("action %s/%s.%s", typ, name, actionName)); err != nil {
+		fail(err)
+	}
 
 	sess, err := c.Open(ctx, cred, connector.OpenOptions{State: stateMgr.For(typ, name)})
 	if err != nil {

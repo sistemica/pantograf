@@ -1,29 +1,29 @@
-// Package llm is the OpenAI-compatible LLM connector. Talks to any
-// `/v1/chat/completions` endpoint: your local proxy, OpenAI, Together,
-// Groq, Ollama, vLLM, anything that speaks the OpenAI shape.
+// Package web is the HTTP fetch + page-extraction connector. Default
+// path is pure-Go (net/http + goquery + html-to-markdown + readability).
+// JS-heavy pages can be rendered by connecting to a Chrome instance over
+// CDP; the connector never auto-spawns a browser.
 //
-// Multiple instances coexist — one per backend / per key. Typical setup:
-//   pgf connect llm proxy    (Sistemica's local proxy at 192.168.1.125:4000)
-//   pgf connect llm openai   (api.openai.com)
-package llm
+// All actions share a per-instance disk cache (in the state store), so
+// calling extract-links → extract-media → extract-markdown on the same
+// URL costs one HTTP (or one CDP roundtrip), not three.
+package web
 
 import (
 	"context"
 
 	"github.com/sistemica/pantograf/connector"
 	"github.com/sistemica/pantograf/state"
-	httptr "github.com/sistemica/pantograf/transport/http"
 )
 
 type Connector struct{}
 
 func (Connector) Descriptor() connector.Descriptor {
 	return connector.Descriptor{
-		Name:        "llm",
-		DisplayName: "LLM (OpenAI-compatible)",
-		Description: "Chat completions + embeddings + model list against any OpenAI-compatible endpoint.",
+		Name:        "web",
+		DisplayName: "Web (fetch + extract)",
+		Description: "Fetch pages and extract markdown, links, media, or HTML by CSS selector. Default HTTP; optional CDP browser mode for JS-heavy pages.",
 		Version:     "0.1.0",
-		Categories:  []string{"ai"},
+		Categories:  []string{"scrape", "io"},
 	}
 }
 
@@ -33,27 +33,23 @@ func (Connector) Triggers() []connector.Trigger { return nil }
 
 func (Connector) Actions() []connector.Action {
 	return []connector.Action{
-		listModelsAction{},
-		chatCompletionAction{},
-		chatWithImageAction{},
-		chatWithAudioAction{},
-		embedAction{},
-		transcribeAction{},
+		fetchAction{},
+		extractMarkdownAction{},
+		extractHTMLAction{},
+		extractLinksAction{},
+		extractMediaAction{},
+		screenshotAction{},
+		searchAction{},
 	}
 }
 
 func (c Connector) Open(ctx context.Context, cred connector.Credential, opts connector.OpenOptions) (connector.Session, error) {
-	cli, err := apiClient(cred)
-	if err != nil {
-		return nil, err
-	}
-	return &session{c: c, cred: cred, http: cli, state: opts.State}, nil
+	return &session{c: c, cred: cred, state: opts.State}, nil
 }
 
 type session struct {
 	c     Connector
 	cred  connector.Credential
-	http  *httptr.Client
 	state state.Store
 }
 

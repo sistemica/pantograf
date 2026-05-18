@@ -292,7 +292,7 @@ func (downloadVoucherPDFAction) Schema() connector.Schema {
 		{Name: "id", Kind: connector.FieldString, Required: true},
 		{Name: "voucher_type", Kind: connector.FieldString, Required: true,
 			Description: "From the voucherlist row's voucherType field."},
-		{Name: "out", Kind: connector.FieldString, Required: true, Description: "Output file path."},
+		{Name: "out", Kind: connector.FieldString, Required: true, IsPath: true, Description: "Output file path."},
 	}}
 }
 

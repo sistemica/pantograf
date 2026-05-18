@@ -80,8 +80,8 @@ func (credSpec) Schema() connector.Schema {
 			Description: "Returned verbatim. Ignored if response_file is set.",
 		},
 		{
-			Name: fResponseFile, Label: "Response file path", Kind: connector.FieldString,
-			Description: "Read at request time (NOT preloaded). Wins over response_body.",
+			Name: fResponseFile, Label: "Response file path", Kind: connector.FieldString, IsPath: true,
+			Description: "Read at request time (NOT preloaded). Wins over response_body. With PGF_ALLOWED_PATHS set, must be within an allowed root.",
 		},
 		{
 			Name: fResponseType, Label: "Response Content-Type", Kind: connector.FieldString,

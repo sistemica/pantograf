@@ -1,11 +1,12 @@
-// Package llm is the OpenAI-compatible LLM connector. Talks to any
-// `/v1/chat/completions` endpoint: your local proxy, OpenAI, Together,
-// Groq, Ollama, vLLM, anything that speaks the OpenAI shape.
+// Package jina wraps Jina AI's hosted Reader / Search / Grounding
+// endpoints. Use it as the fallback when the local `web` connector hits
+// bot detection or JS-heavy pages it can't render — Jina runs a real
+// browser fleet on residential-ish IPs and returns LLM-clean markdown.
 //
-// Multiple instances coexist — one per backend / per key. Typical setup:
-//   pgf connect llm proxy    (Sistemica's local proxy at 192.168.1.125:4000)
-//   pgf connect llm openai   (api.openai.com)
-package llm
+// Three endpoints, one connector instance per Jina deployment (free or
+// keyed). Default base URLs are Jina's public hosts; override only if
+// you're using a self-hosted Reader mirror.
+package jina
 
 import (
 	"context"
@@ -19,11 +20,11 @@ type Connector struct{}
 
 func (Connector) Descriptor() connector.Descriptor {
 	return connector.Descriptor{
-		Name:        "llm",
-		DisplayName: "LLM (OpenAI-compatible)",
-		Description: "Chat completions + embeddings + model list against any OpenAI-compatible endpoint.",
+		Name:        "jina",
+		DisplayName: "Jina AI (Reader + Search + Grounding)",
+		Description: "Hosted browser/SaaS for URL→markdown, web search, and statement grounding. Robust against bot blocking; useful when the local web connector fails.",
 		Version:     "0.1.0",
-		Categories:  []string{"ai"},
+		Categories:  []string{"scrape", "ai"},
 	}
 }
 
@@ -33,17 +34,14 @@ func (Connector) Triggers() []connector.Trigger { return nil }
 
 func (Connector) Actions() []connector.Action {
 	return []connector.Action{
-		listModelsAction{},
-		chatCompletionAction{},
-		chatWithImageAction{},
-		chatWithAudioAction{},
-		embedAction{},
-		transcribeAction{},
+		readAction{},
+		searchAction{},
+		groundAction{},
 	}
 }
 
 func (c Connector) Open(ctx context.Context, cred connector.Credential, opts connector.OpenOptions) (connector.Session, error) {
-	cli, err := apiClient(cred)
+	cli, err := readerClient(cred)
 	if err != nil {
 		return nil, err
 	}

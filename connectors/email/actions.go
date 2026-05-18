@@ -327,7 +327,7 @@ func composeFields() []connector.FieldSpec {
 		{Name: "body", Label: "Body", Kind: connector.FieldLongText, Required: true},
 		{Name: "html", Label: "HTML body", Kind: connector.FieldBool, Default: false},
 		{Name: "from", Label: "From override (must be a configured alias)", Kind: connector.FieldString},
-		{Name: "attachments", Label: "File paths to attach", Kind: connector.FieldStringList},
+		{Name: "attachments", Label: "File paths to attach", Kind: connector.FieldStringList, IsPath: true},
 	}
 }
 
@@ -392,7 +392,7 @@ func (downloadAttachmentAction) Schema() connector.Schema {
 	return connector.Schema{Fields: []connector.FieldSpec{
 		{Name: "uid", Label: "Message UID", Kind: connector.FieldInt, Required: true},
 		{Name: "part_id", Label: "Part ID (e.g. 2 or 2.1)", Kind: connector.FieldString, Required: true},
-		{Name: "out", Label: "Output file path", Kind: connector.FieldString, Required: true},
+		{Name: "out", Label: "Output file path", Kind: connector.FieldString, Required: true, IsPath: true},
 		{Name: "folder", Label: "Folder", Kind: connector.FieldString, Default: "INBOX"},
 	}}
 }

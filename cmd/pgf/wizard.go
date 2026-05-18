@@ -40,6 +40,13 @@ func runWizard(ctx context.Context, typ, name string, spec connector.CredentialS
 
 	// 2. Per-field prompt — values already filled by preset are shown as defaults.
 	for _, f := range spec.Schema().Fields {
+		// Skip fields whose ShowWhen predicate isn't satisfied by what
+		// we've collected so far. Schemas list the discriminator (e.g.
+		// `auth_mode`) ahead of dependent fields so the predicate fires
+		// on the user's pick, not on stale defaults.
+		if !f.IsActive(values) {
+			continue
+		}
 		current, hasPreset := values[f.Name]
 		def := current
 		if !hasPreset {

@@ -768,7 +768,7 @@ func (attachFileAction) Description() string  { return "Upload a local file as a
 func (attachFileAction) Schema() connector.Schema {
 	return connector.Schema{Fields: []connector.FieldSpec{
 		{Name: "issue", Kind: connector.FieldString, Required: true},
-		{Name: "file", Kind: connector.FieldString, Required: true, Description: "Local file path."},
+		{Name: "file", Kind: connector.FieldString, Required: true, IsPath: true, Description: "Local file path."},
 	}}
 }
 
@@ -806,7 +806,7 @@ func (downloadAttachmentAction) Schema() connector.Schema {
 	return connector.Schema{Fields: []connector.FieldSpec{
 		{Name: "issue", Kind: connector.FieldString, Required: true},
 		{Name: "attachment_id", Kind: connector.FieldString, Required: true, Description: "From list-attachments."},
-		{Name: "out", Kind: connector.FieldString, Required: true, Description: "Output file path."},
+		{Name: "out", Kind: connector.FieldString, Required: true, IsPath: true, Description: "Output file path."},
 	}}
 }
 

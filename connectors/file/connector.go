@@ -1,29 +1,29 @@
-// Package llm is the OpenAI-compatible LLM connector. Talks to any
-// `/v1/chat/completions` endpoint: your local proxy, OpenAI, Together,
-// Groq, Ollama, vLLM, anything that speaks the OpenAI shape.
+// Package file is the pluggable-backend file connector. One credential
+// picks a driver (local | s3) and binds to one bucket / root; the action
+// set (list, get, put, delete, stat, search, presign) stays identical
+// regardless. Same design philosophy memo uses for its history backends.
 //
-// Multiple instances coexist — one per backend / per key. Typical setup:
-//   pgf connect llm proxy    (Sistemica's local proxy at 192.168.1.125:4000)
-//   pgf connect llm openai   (api.openai.com)
-package llm
+// Adding a backend is one file implementing the driver interface +
+// a couple of ShowWhen-gated fields on the credential schema. The
+// action layer never grows.
+package file
 
 import (
 	"context"
 
 	"github.com/sistemica/pantograf/connector"
 	"github.com/sistemica/pantograf/state"
-	httptr "github.com/sistemica/pantograf/transport/http"
 )
 
 type Connector struct{}
 
 func (Connector) Descriptor() connector.Descriptor {
 	return connector.Descriptor{
-		Name:        "llm",
-		DisplayName: "LLM (OpenAI-compatible)",
-		Description: "Chat completions + embeddings + model list against any OpenAI-compatible endpoint.",
+		Name:        "file",
+		DisplayName: "File (pluggable backend)",
+		Description: "List/get/put/delete/stat/search files. Backends: local filesystem, S3-compatible (AWS, MinIO, R2, B2).",
 		Version:     "0.1.0",
-		Categories:  []string{"ai"},
+		Categories:  []string{"storage", "io"},
 	}
 }
 
@@ -33,27 +33,28 @@ func (Connector) Triggers() []connector.Trigger { return nil }
 
 func (Connector) Actions() []connector.Action {
 	return []connector.Action{
-		listModelsAction{},
-		chatCompletionAction{},
-		chatWithImageAction{},
-		chatWithAudioAction{},
-		embedAction{},
-		transcribeAction{},
+		listAction{},
+		statAction{},
+		getAction{},
+		putAction{},
+		deleteAction{},
+		searchAction{},
+		presignAction{},
 	}
 }
 
 func (c Connector) Open(ctx context.Context, cred connector.Credential, opts connector.OpenOptions) (connector.Session, error) {
-	cli, err := apiClient(cred)
+	drv, err := buildDriver(cred)
 	if err != nil {
 		return nil, err
 	}
-	return &session{c: c, cred: cred, http: cli, state: opts.State}, nil
+	return &session{c: c, cred: cred, drv: drv, state: opts.State}, nil
 }
 
 type session struct {
 	c     Connector
 	cred  connector.Credential
-	http  *httptr.Client
+	drv   driver
 	state state.Store
 }
 

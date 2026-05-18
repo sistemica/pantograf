@@ -1,11 +1,16 @@
-// Package llm is the OpenAI-compatible LLM connector. Talks to any
-// `/v1/chat/completions` endpoint: your local proxy, OpenAI, Together,
-// Groq, Ollama, vLLM, anything that speaks the OpenAI shape.
+// Package whisper is the dedicated speech-to-text connector. Targets
+// standalone OpenAI-compatible Whisper servers: faster-whisper-server,
+// whisper.cpp's HTTP front-end, vLLM-Whisper, Speaches, etc. The wire
+// shape is identical to OpenAI's /audio/transcriptions endpoint; the
+// difference from the `llm` connector's transcribe action is only where
+// it points (a local STT-only server, often without auth) and that this
+// connector exposes the few audio-specific extras some servers add
+// (vad_filter, language auto-detect threshold, ...).
 //
-// Multiple instances coexist — one per backend / per key. Typical setup:
-//   pgf connect llm proxy    (Sistemica's local proxy at 192.168.1.125:4000)
-//   pgf connect llm openai   (api.openai.com)
-package llm
+// For agents already paying for an OpenAI key or running a unified LLM
+// proxy that bridges audio, use llm/<instance> transcribe — no second
+// connector needed.
+package whisper
 
 import (
 	"context"
@@ -19,11 +24,11 @@ type Connector struct{}
 
 func (Connector) Descriptor() connector.Descriptor {
 	return connector.Descriptor{
-		Name:        "llm",
-		DisplayName: "LLM (OpenAI-compatible)",
-		Description: "Chat completions + embeddings + model list against any OpenAI-compatible endpoint.",
+		Name:        "whisper",
+		DisplayName: "Whisper (speech-to-text)",
+		Description: "Dedicated STT connector for standalone Whisper servers (faster-whisper-server, whisper.cpp, vLLM-Whisper). OpenAI-shape /audio/transcriptions.",
 		Version:     "0.1.0",
-		Categories:  []string{"ai"},
+		Categories:  []string{"ai", "audio"},
 	}
 }
 
@@ -34,11 +39,8 @@ func (Connector) Triggers() []connector.Trigger { return nil }
 func (Connector) Actions() []connector.Action {
 	return []connector.Action{
 		listModelsAction{},
-		chatCompletionAction{},
-		chatWithImageAction{},
-		chatWithAudioAction{},
-		embedAction{},
 		transcribeAction{},
+		translateAction{},
 	}
 }
 

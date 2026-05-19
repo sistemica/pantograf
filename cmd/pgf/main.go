@@ -13,6 +13,7 @@ import (
 
 	"github.com/sistemica/pantograf/connector"
 	bunnypkg "github.com/sistemica/pantograf/connectors/bunny"
+	synapsepkg "github.com/sistemica/pantograf/connectors/synapse"
 	emailpkg "github.com/sistemica/pantograf/connectors/email"
 	filepkg "github.com/sistemica/pantograf/connectors/file"
 	jinapkg "github.com/sistemica/pantograf/connectors/jina"
@@ -49,6 +50,7 @@ func init() {
 		jinapkg.Register,
 		filepkg.Register,
 		bunnypkg.Register,
+		synapsepkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)

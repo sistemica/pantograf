@@ -43,6 +43,10 @@ func (Connector) Actions() []connector.Action {
 		getRoomAction{},
 		sendMessageAction{},
 		getMessagesAction{},
+		createRoomAction{},
+		createSpaceAction{},
+		inviteUserAction{},
+		addRoomToSpaceAction{},
 	}
 }
 

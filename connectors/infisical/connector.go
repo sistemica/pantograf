@@ -69,6 +69,18 @@ func (Connector) Actions() []connector.Action {
 		createSecretAction{},
 		updateSecretAction{},
 		deleteSecretAction{},
+		// org members
+		listOrgMembersAction{},
+		updateOrgMemberRoleAction{},
+		removeOrgMemberAction{},
+		// project members (users + identities)
+		listProjectMembersAction{},
+		addProjectMemberAction{},
+		updateProjectMemberRoleAction{},
+		removeProjectMemberAction{},
+		listProjectIdentitiesAction{},
+		addProjectIdentityAction{},
+		removeProjectIdentityAction{},
 	}
 }
 

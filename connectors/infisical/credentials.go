@@ -19,6 +19,7 @@ const (
 	fClientSecret       = "client_secret"
 	fDefaultProjectID   = "default_project_id"
 	fDefaultEnvironment = "default_environment"
+	fDefaultOrgID       = "default_org_id"
 )
 
 const defaultAPIBase = "https://app.infisical.com"
@@ -50,6 +51,10 @@ func (credSpec) Schema() connector.Schema {
 			Name: fDefaultEnvironment, Label: "Default environment slug (optional)", Kind: connector.FieldString,
 			Default: "dev",
 			Description: "Pre-fills the environment param. Common values: dev, staging, prod.",
+		},
+		{
+			Name: fDefaultOrgID, Label: "Default org ID (optional)", Kind: connector.FieldString,
+			Description: "Used by org-level actions (list-org-members, etc.). Universal Auth identities are bound to one org — find the id under Organization Settings → General.",
 		},
 	}}
 }

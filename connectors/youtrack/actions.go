@@ -1184,9 +1184,16 @@ func (a deleteArticleAction) Run(ctx context.Context, sess connector.Session, pa
 // Generic "create a link between two issues". YouTrack link types include
 // Subtask (parent ↔ child), Relates (peer), Duplicates, Depends.
 //
+// Implementation note — YouTrack's REST `POST /api/issues/{id}/links`
+// returns HTTP 405 for direct calls. The same effect is achieved by
+// running the link as a command-bar phrase against the source issue
+// (e.g. `depends on AGT-19`), which is what YouTrack's own UI does
+// when you add a link in the issue view. We translate the requested
+// (link_type, direction) into the matching command phrase.
+//
 // Direction semantics (using Subtask as example):
-//   OUTWARD: source is parent, target is subtask  →  source "parent for" target
-//   INWARD : source is subtask, target is parent  →  source "subtask of" target
+//   OUTWARD: source is parent, target is subtask  →  command "parent for AGT-19"
+//   INWARD : source is subtask, target is parent  →  command "subtask of AGT-19"
 
 type linkIssuesAction struct{}
 
@@ -1198,12 +1205,12 @@ func (linkIssuesAction) Schema() connector.Schema {
 		{Name: "issue", Kind: connector.FieldString, Required: true, Description: "Source issue id."},
 		{Name: "target", Kind: connector.FieldString, Required: true, Description: "Target issue id."},
 		{Name: "link_type", Kind: connector.FieldString, Default: "Subtask",
-			Description: "Subtask | Relates | Depends | Duplicates."},
+			Description: "Subtask | Relates | Depend | Duplicate (singular, as YouTrack names them)."},
 		{Name: "direction", Kind: connector.FieldEnum, Default: "OUTWARD",
 			Options: []connector.EnumOption{
-				{Value: "OUTWARD", Label: "Outward (source is parent / Relates from / Depends from)"},
-				{Value: "INWARD", Label: "Inward (source is child / Relates to / Depends on)"},
-				{Value: "BOTH", Label: "Both (symmetric link types only)"},
+				{Value: "OUTWARD", Label: "Outward (source is parent / is required for / is duplicated by)"},
+				{Value: "INWARD", Label: "Inward (source is child / depends on / duplicates)"},
+				{Value: "BOTH", Label: "Both (Relates is symmetric)"},
 			}},
 	}}
 }
@@ -1216,15 +1223,92 @@ func (a linkIssuesAction) Run(ctx context.Context, sess connector.Session, param
 	if issue == "" || target == "" {
 		return nil, errors.New("issue and target are required")
 	}
+	phrase, err := linkCommandPhrase(params.String("link_type"), params.String("direction"))
+	if err != nil {
+		return nil, err
+	}
 	body := map[string]any{
-		"linkType":  map[string]any{"name": params.String("link_type")},
+		"query":  phrase + " " + target,
+		"issues": []map[string]any{{"idReadable": issue}},
+		"silent": true,
+	}
+	var out map[string]any
+	if err := s.http.SendJSON(ctx, "POST", "/api/commands", body, &out); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"source":    issue,
+		"target":    target,
+		"link_type": params.String("link_type"),
 		"direction": params.String("direction"),
-		"issues":    []map[string]any{{"idReadable": target}},
+		"command":   phrase + " " + target,
+	}, nil
+}
+
+// linkCommandPhrase translates (link_type, direction) into the YouTrack
+// command-bar phrase that creates the corresponding link. Returns an
+// error for unknown combinations. Only stock YouTrack link types are
+// handled; custom link types added by a YouTrack admin won't match.
+func linkCommandPhrase(linkType, direction string) (string, error) {
+	table := map[string]map[string]string{
+		"Subtask":   {"OUTWARD": "parent for", "INWARD": "subtask of"},
+		"Depend":    {"OUTWARD": "is required for", "INWARD": "depends on"},
+		"Duplicate": {"OUTWARD": "is duplicated by", "INWARD": "duplicates"},
+		"Relates":   {"OUTWARD": "relates to", "INWARD": "relates to", "BOTH": "relates to"},
+	}
+	dirs, ok := table[linkType]
+	if !ok {
+		return "", fmt.Errorf("unknown link_type %q (expected Subtask|Depend|Duplicate|Relates)", linkType)
+	}
+	phrase, ok := dirs[direction]
+	if !ok {
+		return "", fmt.Errorf("unsupported direction %q for link_type %q", direction, linkType)
+	}
+	return phrase, nil
+}
+
+// ── update-issue ──────────────────────────────────────────────────────────
+
+type updateIssueAction struct{}
+
+func (updateIssueAction) Name() string         { return "update-issue" }
+func (updateIssueAction) DisplayName() string  { return "Update issue" }
+func (updateIssueAction) Description() string  { return "Modify summary and/or description on an existing issue. Only the supplied fields are changed." }
+func (updateIssueAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "id", Kind: connector.FieldString, Required: true, Description: "Readable id (e.g. AGT-13) or internal id."},
+		{Name: "summary", Kind: connector.FieldString, Description: "New summary. Omit to leave unchanged."},
+		{Name: "description", Kind: connector.FieldLongText, Description: "New description. Omit to leave unchanged."},
+		{Name: "uses_markdown", Kind: connector.FieldBool, Default: true,
+			Description: "Whether the description uses Markdown. Only applied when description is supplied."},
+	}}
+}
+
+func (a updateIssueAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+	id := params.String("id")
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+	body := map[string]any{}
+	if v := params.String("summary"); v != "" {
+		body["summary"] = v
+	}
+	// Description is treated as "if present, update". The bool form
+	// of empty-string-equals-omit means you can't clear a description
+	// via this action — acceptable for the use cases we care about.
+	if v := params.String("description"); v != "" {
+		body["description"] = v
+		body["usesMarkdown"] = params.Bool("uses_markdown")
+	}
+	if len(body) == 0 {
+		return nil, errors.New("supply at least one of summary or description")
 	}
 	q := url.Values{}
-	q.Set("fields", "id,direction,linkType(name),issues(idReadable,summary)")
+	q.Set("fields", issueFields)
 	var out map[string]any
-	path := "/api/issues/" + url.PathEscape(issue) + "/links?" + q.Encode()
+	path := "/api/issues/" + url.PathEscape(id) + "?" + q.Encode()
 	if err := s.http.SendJSON(ctx, "POST", path, body, &out); err != nil {
 		return nil, err
 	}

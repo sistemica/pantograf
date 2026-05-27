@@ -45,6 +45,7 @@ func (Connector) Actions() []connector.Action {
 		listIssuesAction{},
 		getIssueAction{},
 		createIssueAction{},
+		updateIssueAction{},
 		addCommentAction{},
 		applyCommandAction{},
 		setAssigneeAction{},

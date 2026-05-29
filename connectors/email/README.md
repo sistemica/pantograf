@@ -8,13 +8,26 @@ Single connector covering both IMAP (read / list / search / draft) and SMTP
 
 | Name | Description |
 |---|---|
-| `read-emails` | Most recent N from a folder. Multipart-aware: separates `body` (text/plain), `html_body`, `attachments` metadata. |
-| `get-email` | One message by UID, with body + attachment list. |
+| `read-emails` | Most recent N from a folder. Multipart-aware: separates `body` (text/plain), `html_body`, `attachments` metadata. Returns `message_id` / `in_reply_to`. |
+| `get-email` | One message by UID, with body + attachment list. Returns `message_id` / `in_reply_to`. |
 | `download-attachment` | One attachment part by UID + part_id, decoded, written to disk. |
 | `list-folders` | All IMAP mailboxes (full label hierarchy). |
-| `search-emails` | Subject substring search; configurable limit. |
-| `save-draft` | Compose + APPEND to Drafts. cc/bcc/attachments supported. |
-| `send-email` | Send via SMTP. cc/bcc/from-override/attachments. |
+| `search-emails` | IMAP SEARCH over a folder. `field` selects what to match: `subject` (default), `from`, `to`, `body`, `text` (headers+body); configurable limit. |
+| `save-draft` | Compose + APPEND to Drafts. cc/bcc/attachments + threading (`in_reply_to` / `references`). |
+| `send-email` | Send via SMTP. cc/bcc/from-override/attachments + threading (`in_reply_to` / `references`). |
+
+### Threading (in-thread replies)
+
+`send-email` and `save-draft` accept two optional fields:
+
+- `in_reply_to` — the `Message-ID` you are replying to (from `get-email` /
+  `read-emails` output). Bare ids are normalised to `<id@host>`.
+- `references` — the full References chain. When omitted it defaults to the
+  `in_reply_to` value, which is correct for a direct reply.
+
+These set the `In-Reply-To` and `References` headers so the recipient's client
+threads the message. `message_id` is surfaced on every read action precisely so
+it can be fed back here.
 
 ## Triggers
 
@@ -75,8 +88,14 @@ pgf connect email sistemica
 
 pgf run email/sistemica list-folders
 pgf run email/sistemica read-emails -p folder=INBOX -p limit=5
-pgf run email/sistemica search-emails -p query=invoice
+pgf run email/sistemica search-emails -p query=invoice                 # subject (default)
+pgf run email/sistemica search-emails -p query=alice@x.com -p field=from
+pgf run email/sistemica search-emails -p query=reminder -p field=body
 pgf run email/sistemica get-email -p uid=12345
+
+# Reply in-thread: take message_id from get-email, feed it to in_reply_to
+pgf run email/sistemica send-email -p to=alice@x.com -p subject="Re: hi" \
+                                  -p body=thanks -p in_reply_to='<abc@host>'
 
 pgf run email/sistemica download-attachment -p uid=12345 -p part_id=2 \
                                            -p out=/tmp/file.pdf
@@ -109,3 +128,4 @@ For multiple recipients, either repeat `-p` or comma-separate:
 - No IDLE / new-message trigger
 - OAuth2 path (Gmail with strict 2FA) not implemented
 - No auto-categorization / filter-rule actions
+- IMAP SEARCH is server-side substring, not semantic; no body-text ranking

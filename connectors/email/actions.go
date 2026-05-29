@@ -36,9 +36,30 @@ type EmailMessage struct {
 	To          []string         `json:"to"`
 	Subject     string           `json:"subject"`
 	Date        time.Time        `json:"date"`
+	MessageID   string           `json:"message_id,omitempty"` // RFC Message-ID, e.g. <x@host>
+	InReplyTo   string           `json:"in_reply_to,omitempty"`
 	Body        string           `json:"body,omitempty"`      // text/plain
 	HTMLBody    string           `json:"html_body,omitempty"` // text/html alternative
 	Attachments []AttachmentInfo `json:"attachments,omitempty"`
+}
+
+// fillEnvelope copies the common envelope fields onto em. Centralised so
+// read-emails / get-email / search all expose the same metadata (notably
+// MessageID, which drives in-thread replies).
+func fillEnvelope(em *EmailMessage, env *imap.Envelope) {
+	if env == nil {
+		return
+	}
+	em.Subject = env.Subject
+	em.Date = env.Date
+	em.MessageID = env.MessageID
+	em.InReplyTo = strings.Join(env.InReplyTo, " ")
+	if len(env.From) > 0 {
+		em.From = formatAddr(env.From[0])
+	}
+	for _, addr := range env.To {
+		em.To = append(em.To, formatAddr(addr))
+	}
 }
 
 func (a readEmailsAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
@@ -95,16 +116,7 @@ func (a readEmailsAction) Run(ctx context.Context, sess connector.Session, param
 			return nil, fmt.Errorf("fetch: %w", err)
 		}
 		em := EmailMessage{UID: uint32(buf.UID)}
-		if buf.Envelope != nil {
-			em.Subject = buf.Envelope.Subject
-			em.Date = buf.Envelope.Date
-			if len(buf.Envelope.From) > 0 {
-				em.From = formatAddr(buf.Envelope.From[0])
-			}
-			for _, a := range buf.Envelope.To {
-				em.To = append(em.To, formatAddr(a))
-			}
-		}
+		fillEnvelope(&em, buf.Envelope)
 		if includeBody {
 			for _, body := range buf.BodySection {
 				parsed := parseMessage(body.Bytes)
@@ -171,13 +183,36 @@ type searchEmailsAction struct{}
 
 func (searchEmailsAction) Name() string         { return "search-emails" }
 func (searchEmailsAction) DisplayName() string  { return "Search emails" }
-func (searchEmailsAction) Description() string  { return "Search a folder by subject substring." }
+func (searchEmailsAction) Description() string {
+	return "Search a folder via IMAP SEARCH. field: subject (default), from, to, body, text."
+}
 func (searchEmailsAction) Schema() connector.Schema {
 	return connector.Schema{Fields: []connector.FieldSpec{
-		{Name: "query", Label: "Subject substring", Kind: connector.FieldString, Required: true},
+		{Name: "query", Label: "Search substring", Kind: connector.FieldString, Required: true},
+		{Name: "field", Label: "What to match: subject | from | to | body | text", Kind: connector.FieldString, Default: "subject"},
 		{Name: "folder", Label: "Folder", Kind: connector.FieldString, Default: "INBOX"},
 		{Name: "limit", Label: "Max results", Kind: connector.FieldInt, Default: 20},
 	}}
+}
+
+// searchCriteria maps a field selector to an IMAP SearchCriteria. "from"/"to"/
+// "subject" match the respective header; "body" matches the message body;
+// "text" matches headers + body (server-side full text).
+func searchCriteria(field, query string) (*imap.SearchCriteria, error) {
+	switch strings.ToLower(strings.TrimSpace(field)) {
+	case "", "subject":
+		return &imap.SearchCriteria{Header: []imap.SearchCriteriaHeaderField{{Key: "Subject", Value: query}}}, nil
+	case "from":
+		return &imap.SearchCriteria{Header: []imap.SearchCriteriaHeaderField{{Key: "From", Value: query}}}, nil
+	case "to":
+		return &imap.SearchCriteria{Header: []imap.SearchCriteriaHeaderField{{Key: "To", Value: query}}}, nil
+	case "body":
+		return &imap.SearchCriteria{Body: []string{query}}, nil
+	case "text":
+		return &imap.SearchCriteria{Text: []string{query}}, nil
+	default:
+		return nil, fmt.Errorf("unknown field %q (want subject, from, to, body, or text)", field)
+	}
 }
 
 func (a searchEmailsAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
@@ -201,8 +236,9 @@ func (a searchEmailsAction) Run(ctx context.Context, sess connector.Session, par
 		return nil, err
 	}
 
-	criteria := &imap.SearchCriteria{
-		Header: []imap.SearchCriteriaHeaderField{{Key: "Subject", Value: query}},
+	criteria, err := searchCriteria(params.String("field"), query)
+	if err != nil {
+		return nil, err
 	}
 	searchData, err := cli.Search(criteria, &imap.SearchOptions{}).Wait()
 	if err != nil {
@@ -233,13 +269,7 @@ func fetchByNums(cli *imapclient.Client, nums []uint32) ([]EmailMessage, error) 
 			return nil, err
 		}
 		em := EmailMessage{UID: uint32(buf.UID)}
-		if buf.Envelope != nil {
-			em.Subject = buf.Envelope.Subject
-			em.Date = buf.Envelope.Date
-			if len(buf.Envelope.From) > 0 {
-				em.From = formatAddr(buf.Envelope.From[0])
-			}
-		}
+		fillEnvelope(&em, buf.Envelope)
 		out = append(out, em)
 	}
 	return out, cmd.Close()
@@ -296,16 +326,7 @@ func (a getEmailAction) Run(ctx context.Context, sess connector.Session, params 
 		return nil, err
 	}
 	em := EmailMessage{UID: uint32(buf.UID)}
-	if buf.Envelope != nil {
-		em.Subject = buf.Envelope.Subject
-		em.Date = buf.Envelope.Date
-		if len(buf.Envelope.From) > 0 {
-			em.From = formatAddr(buf.Envelope.From[0])
-		}
-		for _, addr := range buf.Envelope.To {
-			em.To = append(em.To, formatAddr(addr))
-		}
-	}
+	fillEnvelope(&em, buf.Envelope)
 	for _, body := range buf.BodySection {
 		parsed := parseMessage(body.Bytes)
 		em.Body = parsed.TextBody
@@ -328,7 +349,26 @@ func composeFields() []connector.FieldSpec {
 		{Name: "html", Label: "HTML body", Kind: connector.FieldBool, Default: false},
 		{Name: "from", Label: "From override (must be a configured alias)", Kind: connector.FieldString},
 		{Name: "attachments", Label: "File paths to attach", Kind: connector.FieldStringList, IsPath: true},
+		{Name: "in_reply_to", Label: "Message-ID being replied to (keeps reply in-thread)", Kind: connector.FieldString},
+		{Name: "references", Label: "References chain (defaults to in_reply_to if empty)", Kind: connector.FieldStringList},
 	}
+}
+
+// angleWrap normalises a Message-ID to its canonical <id@host> form. IMAP
+// envelopes and most clients already include the angle brackets, but a user
+// passing a bare id should still produce a valid header.
+func angleWrap(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	if !strings.HasPrefix(id, "<") {
+		id = "<" + id
+	}
+	if !strings.HasSuffix(id, ">") {
+		id = id + ">"
+	}
+	return id
 }
 
 // buildMessage assembles a *mail.Msg from params. Returns the validated
@@ -377,6 +417,22 @@ func buildMessage(params connector.Values, defaultFrom string) (*mail.Msg, []str
 			return nil, nil, fmt.Errorf("attach %s: %w", path, err)
 		}
 		msg.AttachFile(path)
+	}
+	// Threading: set In-Reply-To / References so replies land in the same
+	// conversation. References defaults to the in_reply_to id when the caller
+	// doesn't supply the full chain.
+	if irt := angleWrap(params.String("in_reply_to")); irt != "" {
+		msg.SetGenHeader(mail.HeaderInReplyTo, irt)
+		var refs []string
+		for _, r := range params.StringList("references") {
+			if w := angleWrap(r); w != "" {
+				refs = append(refs, w)
+			}
+		}
+		if len(refs) == 0 {
+			refs = []string{irt}
+		}
+		msg.SetGenHeader(mail.HeaderReferences, strings.Join(refs, " "))
 	}
 	return msg, to, nil
 }

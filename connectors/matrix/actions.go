@@ -523,3 +523,65 @@ func (a addRoomToSpaceAction) Run(ctx context.Context, sess connector.Session, p
 		"linked":   true,
 	}, nil
 }
+
+// ── set-typing ─────────────────────────────────────────────────────────────
+
+// setTypingAction tells the homeserver this user is composing a
+// message. Clients (Element, etc.) render an "X is typing…" indicator
+// in the target room for the supplied timeout. Idempotent: re-send
+// with typing=true to extend the indicator, send typing=false to clear.
+//
+// Matrix endpoint:
+//   PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
+//   { "typing": true,  "timeout": 30000 }
+//   { "typing": false }
+//
+// Typing notifications are ephemeral — they don't persist in the room
+// timeline and don't show up via /sync.timeline.events. They're a UX
+// hint only, useful for agents whose responses take several seconds.
+type setTypingAction struct{}
+
+func (setTypingAction) Name() string        { return "set-typing" }
+func (setTypingAction) DisplayName() string { return "Set typing indicator" }
+func (setTypingAction) Description() string {
+	return "Show or clear the 'agent is typing…' indicator in a room. Send typing=true with a timeout while a long response is being prepared; typing=false to clear early."
+}
+
+func (setTypingAction) Schema() connector.Schema {
+	return connector.Schema{Fields: []connector.FieldSpec{
+		{Name: "room", Kind: connector.FieldString, Required: true, Description: "Room id (!...) or alias (#...)."},
+		{Name: "typing", Kind: connector.FieldBool, Default: true, Description: "true = show indicator, false = clear."},
+		{Name: "timeout_ms", Kind: connector.FieldInt, Default: 30000, Description: "How long the indicator should display in milliseconds. Only honored when typing=true."},
+	}}
+}
+
+func (a setTypingAction) Run(ctx context.Context, sess connector.Session, params connector.Values) (any, error) {
+	s := sess.(*session)
+	params = params.WithDefaults(a.Schema())
+
+	roomID, err := resolveRoomID(ctx, s.http, params.String("room"))
+	if err != nil {
+		return nil, err
+	}
+	userID := s.cred.Values.String(fUserID)
+	if userID == "" {
+		return nil, errors.New("user_id missing from credential — re-validate the instance")
+	}
+
+	typing := params.Bool("typing")
+	body := map[string]any{"typing": typing}
+	if typing {
+		timeoutMs := params.Int("timeout_ms")
+		if timeoutMs <= 0 {
+			timeoutMs = 30000
+		}
+		body["timeout"] = timeoutMs
+	}
+
+	path := "/_matrix/client/v3/rooms/" + url.PathEscape(roomID) +
+		"/typing/" + url.PathEscape(userID)
+	if err := s.http.SendJSON(ctx, "PUT", path, body, nil); err != nil {
+		return nil, err
+	}
+	return map[string]any{"room_id": roomID, "typing": typing}, nil
+}

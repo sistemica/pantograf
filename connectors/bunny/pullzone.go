@@ -187,6 +187,12 @@ func (createPullZoneAction) Schema() connector.Schema {
 				{Value: "Volume", Label: "Volume (code 1) — cheaper, fewer PoPs"},
 			},
 			Description: "Pull Zone tier. Volume is ~1/3 the price for higher-egress sites with lower latency sensitivity."},
+		{Name: "origin_type", Kind: connector.FieldInt,
+			Description: "Bunny origin type. 0 = OriginUrl (default). 1 = Hostname (IP-based, set origin_link_value to bare IP)."},
+		{Name: "origin_link_value", Kind: connector.FieldString,
+			Description: "For origin_type=1, the bare hostname or IP (e.g. 94.16.109.30) without scheme or port."},
+		{Name: "add_host_header", Kind: connector.FieldBool,
+			Description: "Forward the request's Host header to origin. Required for virtual-host routing (Traefik, nginx vhosts)."},
 	}}
 }
 
@@ -206,6 +212,15 @@ func (a createPullZoneAction) Run(ctx context.Context, sess connector.Session, p
 		"Name":      name,
 		"OriginUrl": origin,
 		"Type":      typeCode,
+	}
+	if params.Has("origin_type") {
+		body["OriginType"] = params.Int("origin_type")
+	}
+	if params.Has("origin_link_value") {
+		body["OriginLinkValue"] = strings.TrimSpace(params.String("origin_link_value"))
+	}
+	if params.Has("add_host_header") {
+		body["AddHostHeader"] = params.Bool("add_host_header")
 	}
 	var p pullZone
 	if err := s.http.SendJSON(ctx, "POST", "/pullzone", body, &p); err != nil {
@@ -236,6 +251,12 @@ func (updatePullZoneAction) Schema() connector.Schema {
 				{Value: "Volume", Label: "Volume"},
 			},
 			Description: "Switch tier."},
+		{Name: "origin_type", Kind: connector.FieldInt,
+			Description: "Bunny origin type. 0 = OriginUrl. 1 = Hostname (IP-based)."},
+		{Name: "origin_link_value", Kind: connector.FieldString,
+			Description: "For origin_type=1, the bare hostname or IP without scheme or port."},
+		{Name: "add_host_header", Kind: connector.FieldBool,
+			Description: "Forward the request's Host header to origin."},
 	}}
 }
 
@@ -260,6 +281,15 @@ func (a updatePullZoneAction) Run(ctx context.Context, sess connector.Session, p
 		case "volume":
 			body["Type"] = 1
 		}
+	}
+	if params.Has("origin_type") {
+		body["OriginType"] = params.Int("origin_type")
+	}
+	if params.Has("origin_link_value") {
+		body["OriginLinkValue"] = strings.TrimSpace(params.String("origin_link_value"))
+	}
+	if params.Has("add_host_header") {
+		body["AddHostHeader"] = params.Bool("add_host_header")
 	}
 	if len(body) == 0 {
 		return nil, errors.New("at least one field to update is required")

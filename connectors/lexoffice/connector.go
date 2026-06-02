@@ -2,9 +2,10 @@
 // accounting / invoicing API. Bearer-token auth, REST + JSON, plus a
 // dedicated file-download endpoint for invoice PDFs.
 //
-// v0.1 scope: read-side actions (profile, contacts, vouchers, invoices,
-// PDF download). Write actions (create invoice, upload voucher file) come
-// next once the read path is solid.
+// Scope: read-side actions (profile, contacts, vouchers, invoices, PDF
+// download) plus a write path mirroring the `lx` CLI — list posting
+// categories, create purchase-invoice vouchers (incl. §13b reverse charge),
+// and attach files to vouchers.
 package lexoffice
 
 import (
@@ -21,7 +22,7 @@ func (Connector) Descriptor() connector.Descriptor {
 	return connector.Descriptor{
 		Name:        "lexoffice",
 		DisplayName: "Lexware Office (formerly Lexoffice)",
-		Description: "Read German accounting data: profile, contacts, vouchers, invoices, invoice PDFs.",
+		Description: "German accounting (Lexware Office). Read profile, contacts, vouchers, invoices, posting categories, PDFs; create purchase-invoice vouchers and attach files.",
 		Version:     "0.1.0",
 		Categories:  []string{"accounting", "invoicing"},
 	}
@@ -36,9 +37,12 @@ func (Connector) Actions() []connector.Action {
 		getProfileAction{},
 		listContactsAction{},
 		getContactAction{},
+		listCategoriesAction{},
 		listVouchersAction{},
 		getVoucherAction{},
 		downloadVoucherPDFAction{},
+		createPurchaseVoucherAction{},
+		attachVoucherFileAction{},
 	}
 }
 

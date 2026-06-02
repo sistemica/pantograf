@@ -99,6 +99,7 @@ type WebhookTrigger interface {    // Webhook
 | [file](connectors/file/README.md) | list / stat / get / put / delete / search / presign | — | Pluggable backend: local filesystem **or** S3-compatible (AWS / MinIO / R2 / B2). Regex content search (local), time-limited presigned URLs (S3). |
 | [youtrack](connectors/youtrack/README.md) | me / users / projects / issues (CRUD + comments + attachments + state) / articles (CRUD + tree) / `apply-command` (universal field setter) / create-token | — | JetBrains issue tracker. Multi-user via one instance per user-token. Hub permanent tokens. |
 | [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff. |
+| [paperless](connectors/paperless/README.md) | list-documents (full-text + filters) / get-document / download-document / upload-document / update-document / delete-document / list+create tags / correspondents / document-types / task-status / statistics | — | Paperless-ngx DMS. Token auth or username+password exchange. Async upload→consume with task polling; multipart sets a real per-part content-type. |
 | [bunny](connectors/bunny/README.md) | zones (list / get / create / delete / check / export-BIND) / records (add / update / delete) / pull-zones (list / get / create / update / delete) / hostnames (add / remove) / load-free-certificate / set-force-ssl | — | Bunny.net DNS + CDN Pull Zones. String→numeric DNS-type mapping, Let's Encrypt via HTTP-01, host-header forwarding for vhost origins. |
 | [infisical](connectors/infisical/README.md) | projects (CRUD) / environments (CRUD) / folders (list / create / delete) / secrets (CRUD) / org + project membership / identities | — | Infisical secrets management via Universal Auth. Self-hosted-friendly. Reads plaintext via the `/raw` endpoint (workspace E2EE disabled). |
 
@@ -236,6 +237,7 @@ pantograf/
 │   ├── file/                    # local FS / S3-compatible
 │   ├── youtrack/                # JetBrains
 │   ├── lexoffice/               # Lexware Office
+│   ├── paperless/               # Paperless-ngx DMS
 │   ├── bunny/                   # Bunny.net DNS + CDN
 │   └── infisical/               # secrets management
 ├── examples/                    # runnable workflows
@@ -257,6 +259,7 @@ Confirmed-working today (real E2E tested in development):
 - webhook: GET / POST / PUT, HMAC-SHA256 (LemonSqueezy + GitHub-prefix), API-key auth, response-file read at request time
 - youtrack: ~30 actions across users / projects / issues / articles / comments / attachments
 - lexoffice: read path against the live Lexware API; byte-perfect PDF download
+- paperless: read + full write cycle (upload→consume→update→download→delete) verified against two live Paperless-ngx instances
 - bunny: DNS zones/records + CDN Pull Zones, custom hostnames, Let's Encrypt
 - infisical: secrets / projects / environments / folders + org & project membership via Universal Auth
 

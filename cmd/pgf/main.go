@@ -13,15 +13,16 @@ import (
 
 	"github.com/sistemica/pantograf/connector"
 	bunnypkg "github.com/sistemica/pantograf/connectors/bunny"
-	infisicalpkg "github.com/sistemica/pantograf/connectors/infisical"
-	synapsepkg "github.com/sistemica/pantograf/connectors/synapse"
 	emailpkg "github.com/sistemica/pantograf/connectors/email"
 	filepkg "github.com/sistemica/pantograf/connectors/file"
+	infisicalpkg "github.com/sistemica/pantograf/connectors/infisical"
 	jinapkg "github.com/sistemica/pantograf/connectors/jina"
 	lexofficepkg "github.com/sistemica/pantograf/connectors/lexoffice"
 	llmpkg "github.com/sistemica/pantograf/connectors/llm"
 	matrixpkg "github.com/sistemica/pantograf/connectors/matrix"
+	paperlesspkg "github.com/sistemica/pantograf/connectors/paperless"
 	rsspkg "github.com/sistemica/pantograf/connectors/rss"
+	synapsepkg "github.com/sistemica/pantograf/connectors/synapse"
 	telegrampkg "github.com/sistemica/pantograf/connectors/telegram"
 	webpkg "github.com/sistemica/pantograf/connectors/web"
 	webhookpkg "github.com/sistemica/pantograf/connectors/webhook"
@@ -53,6 +54,7 @@ func init() {
 		bunnypkg.Register,
 		synapsepkg.Register,
 		infisicalpkg.Register,
+		paperlesspkg.Register,
 	} {
 		if err := reg(connector.Default); err != nil {
 			panic(err)

@@ -86,14 +86,21 @@ type WebhookTrigger interface {    // Webhook
 
 | Name | Actions | Triggers | Notes |
 |---|---|---|---|
-| [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail / GMX / Gmail / Protonmail Bridge / Custom), multipart parsing, encrypted-at-rest creds |
+| [email](connectors/email/README.md) | read-emails / get-email / list-folders / search-emails (subject/from/to/body/text) / save-draft / send-email / download-attachment | — | IMAP + SMTP, vendor presets (Fastmail / GMX / Gmail / Protonmail Bridge / Custom), multipart parsing, in-thread replies (`in_reply_to`), encrypted-at-rest creds |
 | [telegram](connectors/telegram/README.md) | get-me / get-updates / send-message / send-photo / send-document / set-webhook / delete-webhook / get-webhook-info | messages (polling, persistent offset) | Bot API |
-| [matrix](connectors/matrix/README.md) | whoami / list-rooms / get-room / send-message / get-messages | messages (polling /sync, persistent next_batch) | Matrix C-S API. Bearer auth, login fallback that exchanges password→token at Validate and discards the password. |
+| [matrix](connectors/matrix/README.md) | whoami / list-rooms / get-room / send-message / set-typing / get-messages / create-room / create-space / invite-user / add-room-to-space | messages (polling /sync, persistent next_batch) | Matrix C-S API. Bearer auth, login fallback that exchanges password→token at Validate and discards the password. |
+| [synapse](connectors/synapse/README.md) | server-version / users (list / get / create / set-password / deactivate) / rooms (list / delete / purge-history) | — | Synapse **admin** API — server-wide user/room management. Requires an admin-flagged token. Distinct from `matrix` (the standard C-S API any homeserver implements). |
 | [llm](connectors/llm/README.md) | list-models / chat-completion / embed | — | OpenAI-compatible. Reasoning channel + tool calls pass-through. 10-min HTTP timeout for long thinking calls. |
+| [whisper](connectors/whisper/README.md) | list-models / transcribe / translate | — | Speech-to-text against standalone Whisper servers (faster-whisper-server, whisper.cpp, vLLM-Whisper). OpenAI-shape `/audio/transcriptions`. |
+| [web](connectors/web/README.md) | fetch / extract-markdown / extract-html / extract-links / extract-media / screenshot / search | — | Fetch + extract. Default HTTP, optional CDP browser mode for JS-heavy pages. Readability→markdown, CSS-selector extraction, DuckDuckGo search, per-instance cache. |
+| [jina](connectors/jina/README.md) | read / search / ground | — | Jina AI hosted Reader + Search + Grounding. URL→markdown resilient to bot-blocking; web search; statement factuality scoring. Fallback when `web` is blocked. |
 | [webhook](connectors/webhook/README.md) | — | incoming (any method, parsed body, optional API-key + HMAC auth, configurable response from string or file) | Generic HTTP receiver. Glue for any upstream that POSTs. |
 | [rss](connectors/rss/README.md) | fetch / list-new / mark-seen / info / reset | new-items (polling, persistent watermark) | Stateful RSS / Atom / JSON Feed reader. Skips backlog by default. |
+| [file](connectors/file/README.md) | list / stat / get / put / delete / search / presign | — | Pluggable backend: local filesystem **or** S3-compatible (AWS / MinIO / R2 / B2). Regex content search (local), time-limited presigned URLs (S3). |
 | [youtrack](connectors/youtrack/README.md) | me / users / projects / issues (CRUD + comments + attachments + state) / articles (CRUD + tree) / `apply-command` (universal field setter) / create-token | — | JetBrains issue tracker. Multi-user via one instance per user-token. Hub permanent tokens. |
 | [lexoffice](connectors/lexoffice/README.md) | get-profile / list-contacts / get-contact / list-vouchers / get-voucher / download-voucher-pdf | — | German accounting (Lexware Office). Bearer auth, type-aware voucher dispatch, exponential 429 backoff. |
+| [bunny](connectors/bunny/README.md) | zones (list / get / create / delete / check / export-BIND) / records (add / update / delete) / pull-zones (list / get / create / update / delete) / hostnames (add / remove) / load-free-certificate / set-force-ssl | — | Bunny.net DNS + CDN Pull Zones. String→numeric DNS-type mapping, Let's Encrypt via HTTP-01, host-header forwarding for vhost origins. |
+| [infisical](connectors/infisical/README.md) | projects (CRUD) / environments (CRUD) / folders (list / create / delete) / secrets (CRUD) / org + project membership / identities | — | Infisical secrets management via Universal Auth. Self-hosted-friendly. Reads plaintext via the `/raw` endpoint (workspace E2EE disabled). |
 
 ### Transports
 
@@ -219,11 +226,18 @@ pantograf/
 │   ├── email/                   # IMAP + SMTP
 │   ├── telegram/                # Bot API
 │   ├── matrix/                  # Matrix C-S API
+│   ├── synapse/                 # Synapse admin API
 │   ├── llm/                     # OpenAI-compatible
+│   ├── whisper/                 # speech-to-text
+│   ├── web/                     # fetch + extract (HTTP / CDP)
+│   ├── jina/                    # Jina AI Reader / Search / Grounding
 │   ├── webhook/                 # generic HTTP-in
 │   ├── rss/                     # feed reader
+│   ├── file/                    # local FS / S3-compatible
 │   ├── youtrack/                # JetBrains
-│   └── lexoffice/               # Lexware Office
+│   ├── lexoffice/               # Lexware Office
+│   ├── bunny/                   # Bunny.net DNS + CDN
+│   └── infisical/               # secrets management
 ├── examples/                    # runnable workflows
 └── cmd/pgf/                     # the reference CLI
 ```
@@ -232,13 +246,19 @@ pantograf/
 
 Confirmed-working today (real E2E tested in development):
 
-- email: Fastmail / Protonmail Bridge — wizard, list/read/search/draft/send, attachments, multipart parsing, byte-perfect attachment round-trip
+- email: Fastmail / Protonmail Bridge — wizard, list/read/draft/send, multi-field search (subject/from/to/body/text), in-thread replies, attachments, multipart parsing, byte-perfect attachment round-trip
 - telegram: full Bot API surface + persistent-offset `messages` trigger (verified resume across restart)
-- matrix: send/read + long-poll `/sync` trigger with persistent `next_batch`
+- matrix: send/read + long-poll `/sync` trigger with persistent `next_batch`; create-room/space, invite, typing indicator
+- synapse: admin user/room management against a live Synapse homeserver
 - llm: reasoning + tool calls round-trip against an OpenAI-compatible endpoint
+- whisper: transcribe / translate against a faster-whisper-server endpoint
+- web / jina: URL→markdown extraction and web search (HTTP, CDP browser, and Jina hosted fallback)
+- file: local FS + S3-compatible (MinIO/R2/B2) list/get/put/delete/search
 - webhook: GET / POST / PUT, HMAC-SHA256 (LemonSqueezy + GitHub-prefix), API-key auth, response-file read at request time
 - youtrack: ~30 actions across users / projects / issues / articles / comments / attachments
 - lexoffice: read path against the live Lexware API; byte-perfect PDF download
+- bunny: DNS zones/records + CDN Pull Zones, custom hostnames, Let's Encrypt
+- infisical: secrets / projects / environments / folders + org & project membership via Universal Auth
 
 Open follow-ups:
 
